@@ -1,0 +1,37 @@
+{
+  "trailingSlash": "auto",
+  "routes": [
+    {
+      "route": "/about.html",
+      "redirect": "/about/",
+      "statusCode": 301
+    },
+    {
+      "route": "/logistics.html",
+      "redirect": "/",
+      "statusCode": 301
+    },
+    {
+      "route": "/transport.html",
+      "redirect": "/",
+      "statusCode": 301
+    },
+    {
+      "route": "/high-value.html",
+      "redirect": "/",
+      "statusCode": 301
+    }
+  ],
+  "responseOverrides": {
+    "404": {
+      "rewrite": "/404.html",
+      "statusCode": 404
+    }
+  },
+  "mimeTypes": {
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".webmanifest": "application/manifest+json"
+  }
+}
