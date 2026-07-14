@@ -250,11 +250,22 @@
         });
     }
 
+    function initFormTimestamps() {
+        // The static pages carry a frozen form_ts value; the API's min-fill-time
+        // spam gate only works when this is stamped at page load.
+        var stamp = String(Math.floor(Date.now() / 1000));
+
+        document.querySelectorAll('input[name="form_ts"]').forEach(function (field) {
+            field.value = stamp;
+        });
+    }
+
     $(function () {
         setActiveNavLink();
         initMobileNav();
         initSlider();
         initFaqs();
         initCounters();
+        initFormTimestamps();
     });
 }(jQuery));

@@ -1,5 +1,45 @@
 # tasks/todo.md
 
+## BAC-9 — Graph email provider (2026-07-14)
+
+### Spec (BAC-3 decision, recorded on the ticket)
+- Provider: Microsoft Graph app-only `POST /users/{mailbox}/sendMail`, `Mail.Send` application permission, client-credentials token from `login.microsoftonline.com/{tenant}/oauth2/v2.0/token` (scope `https://graph.microsoft.com/.default`). No SDK — Node 20 global fetch, zero new deps.
+- SMTP AUTH ruled out: Microsoft disables basic-auth client submission by default Dec 2026.
+- Config via SWA app settings only: `EMAIL_PROVIDER=graph`, `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, plus existing `CONTACT_RECIPIENT` / `CONTACT_FROM`. Stub stays the default provider until settings are applied.
+- Test config: from `donotreply@baclogistics.co.za` (exists; also scanner@ identity), to Rourke's personal address. Go-live: recipient → `info@` (alias on broughton@). Dedicated `noreply@` shared mailbox remains the cleaner long-term sender (trade-off on BAC-3).
+- Security: scope app registration to the sending mailbox (Exchange application access policy) before production.
+
+### Checklist
+- [x] email.js: implement `graph` provider (token cache, sendMail, clear missing-config errors); drop dead `smtp` branch
+- [x] handler.js: DEFAULT_FROM → donotreply@ (noreply@ doesn't exist in the tenant)
+- [x] Unit tests: graph request shapes, token caching, non-202 failure, missing config
+- [x] npm test green (17/17)
+- [x] Entra app registration "BAC Website Contact Form" (appId 1d7da6a8-6ea2-4a27-8dcd-cbf59f13df75) + Mail.Send app role + SP
+- [ ] **Admin consent — BLOCKED on Global Admin** (rourke@ holds Exchange/Service Support/AI Admin only; consent needs Admin@BACSA.onmicrosoft.com)
+- [x] SWA app settings via az: EMAIL_PROVIDER=graph, GRAPH_TENANT_ID/CLIENT_ID/CLIENT_SECRET, CONTACT_RECIPIENT=rourke9001@gmail.com (test), CONTACT_FROM=donotreply@
+- [ ] Application access policy scoping app → donotreply@ (Exchange Online PowerShell; rourke@ has Exchange Admin, can run)
+- [x] Commit → develop (cb2dfab), Jira In Progress
+
+### Review
+- 17/17 unit tests pass; provider is dependency-free (Node 20 fetch), token cached with 60s early-refresh, non-202/again non-2xx token responses raise with trimmed Graph error detail.
+- First secret got echoed to the terminal by a cmd.exe parse error (az.cmd + parens in --query); rotated immediately — the exposed value is invalid. Settings applied with `-o none` on retry.
+- App currently has zero effective permissions until admin consent is granted, so the exposure window was inert anyway.
+
+
+## BAC-10 — Repoint forms + form_ts stamp (2026-07-14)
+
+### Checklist
+- [x] 14 HTML forms: action="/inc/form/action.php" → "/api/contact-form" (byte-exact replace, UTF-8 no BOM preserved)
+- [x] main.js: initFormTimestamps() stamps input[name=form_ts] at page load (min-fill gate live once deployed)
+- [x] Browser verification on local server: contact + service forms repointed, fresh epoch stamp each load (raw HTML still frozen), no console errors, form-less pages no-op
+- [ ] PR develop → main (user merges), SWA deploys
+- [ ] 3 end-to-end test enquiries from outside address incl. junk-folder checks (after admin consent + deploy)
+- [ ] Jira comment + transition
+
+### Review
+_(E2E pending admin consent + deploy)_
+
+
 ## BAC-8 — Contact-form Azure Function (2026-07-14)
 
 ### Spec (from old inc/form/action.php + BAC-8 rescope comment)
