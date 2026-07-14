@@ -9,8 +9,9 @@ Project context
 •site/ is the mirror of the live site (148 pages, blog pagination as /blog/pg/N/).
 
 Branching and Git
-•Work on the develop branch; changes reach main only via PR.
-•Open PRs with gh, but the user merges them — never merge to main.
+•develop is the working branch; base feature branches off develop and merge them into develop.
+•Changes reach main only via PR (develop → main). Open PRs with gh, but the user merges them — never merge to main.
+•Pushes to main trigger the Azure Static Web Apps deploy (GitHub Actions); PRs to main get preview environments.
 •Never commit anything under archive/ or any *.sql file (old-site credentials and PII; it is gitignored — keep it that way).
 
 Jira
