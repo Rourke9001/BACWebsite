@@ -1,5 +1,31 @@
 # tasks/todo.md
 
+## BAC-8 — Contact-form Azure Function (2026-07-14)
+
+### Spec (from old inc/form/action.php + BAC-8 rescope comment)
+- Form IDs: `contact_form`, `service_form`; fields: name, email, phone, company, message_subject, message, consent, form_location, form_ts, honeypot `company_website`.
+- Anti-spam (replicate): honeypot must be empty; min-fill 3s (only when form_ts present/valid); rate limit 5 per IP+form per 300s; disposable domains mailinator.com/tempmail.com/10minutemail.com; >5 links in message rejected; idempotency sha256(fields|ip|ua) TTL 180s → duplicate pretends success.
+- Required: name, email (valid), message. Subjects: "BAC Logistics Contact Form" / "BAC Logistics Service Form".
+- Response contract: JSON when Accept: application/json or X-Requested-With; else redirect — success → `/information/thank-you.html?status=ok&rid=…`, error → `/?status=error&rid=…`.
+- Recipient: info@baclogistics.co.za only. From noreply@baclogistics.co.za. NO Integrately, NO ideation BCC, NO reCAPTCHA, no file uploads.
+- Email send stubbed behind interface (`EMAIL_PROVIDER=stub|smtp|graph`) for BAC-9.
+- Known gap for BAC-10: mirrored pages carry a frozen `form_ts`, so the min-fill gate is a no-op until BAC-10's front-end sets form_ts at page load (and repoints action to /api/contact-form).
+
+### Checklist
+- [x] Scaffold api/: host.json, package.json, .funcignore, Node v4 programming model
+- [x] src/functions/contact-form.js — thin HTTP adapter (only file importing @azure/functions)
+- [x] src/lib/handler.js + spam.js + email.js — pure, testable logic
+- [x] Unit tests (node:test) covering each anti-spam gate + happy path + response contract
+- [x] Run tests, verify green (13/13 pass, `npm test`)
+- [ ] Commit develop, push, Jira comment + In Review
+
+### Review
+- 13 unit tests pass with plain Node (no npm install needed — handler/spam/email have zero deps; only the adapter imports @azure/functions, which the SWA build installs).
+- Every old-handler gate replicated with identical thresholds and identical response contract (JSON vs 303 redirect w/ status+rid). Integrately, ideation BCC, reCAPTCHA, uploads all dropped per rescope.
+- Rate-limit/idempotency stores are in-memory per instance — equivalent parity to the old per-server file store for this traffic; documented in api/README.md.
+- Flagged for BAC-10: mirrored `form_ts` is frozen → min-fill gate inert until front-end sets it at page load.
+
+
 ## BAC-7 — Post-mirror cleanup + staticwebapp.config.json (2026-07-14)
 
 ### Findings from pre-work scan (basis for the plan)
