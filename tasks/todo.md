@@ -10,16 +10,34 @@
 - Security: scope app registration to the sending mailbox (Exchange application access policy) before production.
 
 ### Checklist
-- [ ] email.js: implement `graph` provider (token cache, sendMail, clear missing-config errors); drop dead `smtp` branch
-- [ ] handler.js: DEFAULT_FROM → donotreply@ (noreply@ doesn't exist in the tenant)
-- [ ] Unit tests: graph request shapes, token caching, non-202 failure, missing config
-- [ ] npm test green
-- [ ] Entra app registration + Mail.Send + admin consent + client secret (with user)
-- [ ] SWA app settings via az (secrets never in git)
-- [ ] Commit → develop, Jira comment + transition
+- [x] email.js: implement `graph` provider (token cache, sendMail, clear missing-config errors); drop dead `smtp` branch
+- [x] handler.js: DEFAULT_FROM → donotreply@ (noreply@ doesn't exist in the tenant)
+- [x] Unit tests: graph request shapes, token caching, non-202 failure, missing config
+- [x] npm test green (17/17)
+- [x] Entra app registration "BAC Website Contact Form" (appId 1d7da6a8-6ea2-4a27-8dcd-cbf59f13df75) + Mail.Send app role + SP
+- [ ] **Admin consent — BLOCKED on Global Admin** (rourke@ holds Exchange/Service Support/AI Admin only; consent needs Admin@BACSA.onmicrosoft.com)
+- [x] SWA app settings via az: EMAIL_PROVIDER=graph, GRAPH_TENANT_ID/CLIENT_ID/CLIENT_SECRET, CONTACT_RECIPIENT=rourke9001@gmail.com (test), CONTACT_FROM=donotreply@
+- [ ] Application access policy scoping app → donotreply@ (Exchange Online PowerShell; rourke@ has Exchange Admin, can run)
+- [x] Commit → develop (cb2dfab), Jira In Progress
 
 ### Review
-_(pending)_
+- 17/17 unit tests pass; provider is dependency-free (Node 20 fetch), token cached with 60s early-refresh, non-202/again non-2xx token responses raise with trimmed Graph error detail.
+- First secret got echoed to the terminal by a cmd.exe parse error (az.cmd + parens in --query); rotated immediately — the exposed value is invalid. Settings applied with `-o none` on retry.
+- App currently has zero effective permissions until admin consent is granted, so the exposure window was inert anyway.
+
+
+## BAC-10 — Repoint forms + form_ts stamp (2026-07-14)
+
+### Checklist
+- [x] 14 HTML forms: action="/inc/form/action.php" → "/api/contact-form" (byte-exact replace, UTF-8 no BOM preserved)
+- [x] main.js: initFormTimestamps() stamps input[name=form_ts] at page load (min-fill gate live once deployed)
+- [x] Browser verification on local server: contact + service forms repointed, fresh epoch stamp each load (raw HTML still frozen), no console errors, form-less pages no-op
+- [ ] PR develop → main (user merges), SWA deploys
+- [ ] 3 end-to-end test enquiries from outside address incl. junk-folder checks (after admin consent + deploy)
+- [ ] Jira comment + transition
+
+### Review
+_(E2E pending admin consent + deploy)_
 
 
 ## BAC-8 — Contact-form Azure Function (2026-07-14)
