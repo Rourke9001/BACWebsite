@@ -1,0 +1,2 @@
+# Mirrored site content must stay byte-exact — no EOL conversion
+site/** -text

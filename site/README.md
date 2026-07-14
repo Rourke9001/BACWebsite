@@ -1,5 +1,4 @@
 # site/
 
-Static site — the Azure SWA deploy artifact. The mirror of https://baclogistics.co.za
-lands here (BAC-6), preserving the live URL structure. Post-mirror cleanup and
-`staticwebapp.config.json` are BAC-7.
+Static site — the Azure SWA deploy artifact. Mirrored from https://baclogistics.co.za
+by scripts/mirror.mjs (BAC-6). Post-mirror cleanup and staticwebapp.config.json are BAC-7.
