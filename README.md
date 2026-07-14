@@ -28,6 +28,45 @@ host to **Azure Static Web Apps** as a static rebuild. Plan and progress are tra
 ~135 URLs: home, about, contact, services index + 13 service pages, blog index + ~95 posts,
 video hub + ~16 videos, 2 information pages (incl. privacy policy), 5 downloadable docs in `/files/`.
 
+## Local preview
+
+No PHP, no database, no build step — `site/` is plain files. Serve it with anything:
+
+```powershell
+cd site
+python -m http.server 8080     # then open http://localhost:8080
+# or, without Python:
+npx serve .
+```
+
+Don't open the HTML files directly from disk (`file://`) — links are root-relative
+(`/about/`, `/inc/css/...`) and only resolve through a web server.
+
+## Branching & deploys
+
+- **`develop`** is the working branch (GitHub default) — commit day-to-day work here.
+- **`main`** is protected: no direct pushes; changes arrive by PR from `develop`.
+- Once the Azure Static Web App is connected (BAC-11), its GitHub Actions workflow
+  deploys on every push to `main` — so **merging a PR is publishing**. Nothing else
+  to do; the site updates ~1–2 minutes after merge.
+
+## Publishing a blog post
+
+There is no server to update — a "publish" is just a merge to `main`, and the
+redeploy is automatic. Interim manual flow (until BAC-13 automates it):
+
+1. On `develop`: copy an existing post, e.g. `site/blog/what-is-bonded-warehousing.html`,
+   to a new filename; edit title/meta/content; drop the post image into
+   `site/couch/uploads/image/blog/`.
+2. Add the post's card to `site/blog/index.html` (and `site/sitemap.xml`).
+3. PR `develop` → `main`, merge — live a couple of minutes later.
+
+Step 2 is the clunky part (a new post should ripple through the pagination pages).
+BAC-13 replaces this with: write the post as **markdown**, a build script generates
+the post page + regenerates the blog listing/pagination/sitemap, CI deploys. Until
+then, an easier interim option is rerunning `node scripts/mirror.mjs` while the old
+CouchCMS site is still up — author the post in CouchCMS as before, re-mirror, commit.
+
 ## Sensitive data — read before committing
 
 Never commit: `archive/` (enforced via `.gitignore`), any `*.sql` dump, the old
