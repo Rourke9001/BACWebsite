@@ -138,14 +138,103 @@ test('sender failure reports a friendly error', async () => {
   assert.match(result.payload.message, /could not send/i);
 });
 
-test('stub email sender logs instead of sending; smtp/graph are BAC-9 stubs', async () => {
+test('stub email sender logs instead of sending; unknown providers rejected', async () => {
   const logs = [];
   const stub = createEmailSender({}, (msg) => logs.push(msg));
   await stub.send({ to: 'info@baclogistics.co.za', subject: 'x' });
   assert.equal(logs.length, 1);
   assert.match(logs[0], /email:stub/);
 
-  const smtp = createEmailSender({ EMAIL_PROVIDER: 'smtp' }, () => {});
-  await assert.rejects(() => smtp.send({}), /BAC-9/);
+  assert.throws(() => createEmailSender({ EMAIL_PROVIDER: 'smtp' }, () => {}), /Unknown EMAIL_PROVIDER/);
   assert.throws(() => createEmailSender({ EMAIL_PROVIDER: 'pigeon' }, () => {}), /Unknown EMAIL_PROVIDER/);
+});
+
+// ---- Graph provider (BAC-9) ----
+
+const GRAPH_ENV = {
+  EMAIL_PROVIDER: 'graph',
+  GRAPH_TENANT_ID: 'tenant-123',
+  GRAPH_CLIENT_ID: 'client-456',
+  GRAPH_CLIENT_SECRET: 'secret-789',
+};
+
+function graphMessage(overrides = {}) {
+  return {
+    to: 'rourke9001@gmail.com',
+    from: 'donotreply@baclogistics.co.za',
+    fromName: 'BAC Logistics',
+    replyTo: 'jane@example.com',
+    subject: 'BAC Logistics Contact Form',
+    text: 'Name: Jane Tester',
+    ...overrides,
+  };
+}
+
+function fakeFetch(responses) {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    const res = responses.shift();
+    if (!res) throw new Error('fakeFetch: no response queued');
+    return {
+      ok: res.status >= 200 && res.status < 300,
+      status: res.status,
+      async json() { return res.body; },
+      async text() { return JSON.stringify(res.body || ''); },
+    };
+  };
+  return { calls, fetchImpl };
+}
+
+const TOKEN_OK = { status: 200, body: { access_token: 'tok-abc', expires_in: 3599 } };
+
+test('graph provider requires all three credential settings', () => {
+  assert.throws(
+    () => createEmailSender({ EMAIL_PROVIDER: 'graph', GRAPH_TENANT_ID: 't' }, () => {}),
+    /GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET/,
+  );
+});
+
+test('graph send: client-credentials token then sendMail as the from mailbox', async () => {
+  const { calls, fetchImpl } = fakeFetch([TOKEN_OK, { status: 202 }]);
+  const sender = createEmailSender(GRAPH_ENV, () => {}, fetchImpl);
+  await sender.send(graphMessage());
+
+  assert.equal(calls.length, 2);
+
+  const tokenCall = calls[0];
+  assert.equal(tokenCall.url, 'https://login.microsoftonline.com/tenant-123/oauth2/v2.0/token');
+  const params = new URLSearchParams(tokenCall.options.body);
+  assert.equal(params.get('grant_type'), 'client_credentials');
+  assert.equal(params.get('client_id'), 'client-456');
+  assert.equal(params.get('scope'), 'https://graph.microsoft.com/.default');
+
+  const sendCall = calls[1];
+  assert.equal(sendCall.url, 'https://graph.microsoft.com/v1.0/users/donotreply%40baclogistics.co.za/sendMail');
+  assert.equal(sendCall.options.headers.Authorization, 'Bearer tok-abc');
+  const body = JSON.parse(sendCall.options.body);
+  assert.equal(body.message.subject, 'BAC Logistics Contact Form');
+  assert.equal(body.message.toRecipients[0].emailAddress.address, 'rourke9001@gmail.com');
+  assert.equal(body.message.replyTo[0].emailAddress.address, 'jane@example.com');
+  assert.deepEqual(body.message.from.emailAddress, { address: 'donotreply@baclogistics.co.za', name: 'BAC Logistics' });
+  assert.equal(body.message.body.content, 'Name: Jane Tester');
+});
+
+test('graph send reuses the cached token across sends', async () => {
+  const { calls, fetchImpl } = fakeFetch([TOKEN_OK, { status: 202 }, { status: 202 }]);
+  const sender = createEmailSender(GRAPH_ENV, () => {}, fetchImpl);
+  await sender.send(graphMessage());
+  await sender.send(graphMessage({ subject: 'second' }));
+  assert.equal(calls.length, 3); // one token request, two sends
+  assert.equal(calls[2].options.headers.Authorization, 'Bearer tok-abc');
+});
+
+test('graph send surfaces token and sendMail failures', async () => {
+  const denied = fakeFetch([{ status: 401, body: { error: 'invalid_client' } }]);
+  const sender1 = createEmailSender(GRAPH_ENV, () => {}, denied.fetchImpl);
+  await assert.rejects(() => sender1.send(graphMessage()), /token request failed \(401\)/);
+
+  const rejected = fakeFetch([TOKEN_OK, { status: 403, body: { error: { code: 'ErrorAccessDenied' } } }]);
+  const sender2 = createEmailSender(GRAPH_ENV, () => {}, rejected.fetchImpl);
+  await assert.rejects(() => sender2.send(graphMessage()), /sendMail failed \(403\)/);
 });
