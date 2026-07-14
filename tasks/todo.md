@@ -1,5 +1,27 @@
 # tasks/todo.md
 
+## BAC-9 — Graph email provider (2026-07-14)
+
+### Spec (BAC-3 decision, recorded on the ticket)
+- Provider: Microsoft Graph app-only `POST /users/{mailbox}/sendMail`, `Mail.Send` application permission, client-credentials token from `login.microsoftonline.com/{tenant}/oauth2/v2.0/token` (scope `https://graph.microsoft.com/.default`). No SDK — Node 20 global fetch, zero new deps.
+- SMTP AUTH ruled out: Microsoft disables basic-auth client submission by default Dec 2026.
+- Config via SWA app settings only: `EMAIL_PROVIDER=graph`, `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, plus existing `CONTACT_RECIPIENT` / `CONTACT_FROM`. Stub stays the default provider until settings are applied.
+- Test config: from `donotreply@baclogistics.co.za` (exists; also scanner@ identity), to Rourke's personal address. Go-live: recipient → `info@` (alias on broughton@). Dedicated `noreply@` shared mailbox remains the cleaner long-term sender (trade-off on BAC-3).
+- Security: scope app registration to the sending mailbox (Exchange application access policy) before production.
+
+### Checklist
+- [ ] email.js: implement `graph` provider (token cache, sendMail, clear missing-config errors); drop dead `smtp` branch
+- [ ] handler.js: DEFAULT_FROM → donotreply@ (noreply@ doesn't exist in the tenant)
+- [ ] Unit tests: graph request shapes, token caching, non-202 failure, missing config
+- [ ] npm test green
+- [ ] Entra app registration + Mail.Send + admin consent + client secret (with user)
+- [ ] SWA app settings via az (secrets never in git)
+- [ ] Commit → develop, Jira comment + transition
+
+### Review
+_(pending)_
+
+
 ## BAC-8 — Contact-form Azure Function (2026-07-14)
 
 ### Spec (from old inc/form/action.php + BAC-8 rescope comment)
