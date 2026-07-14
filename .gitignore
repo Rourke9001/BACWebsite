@@ -1,0 +1,16 @@
+# Old-site backup — contains DB dumps, plaintext credentials (couch/config.php),
+# and PII (form submission logs/uploads). NEVER commit anything under archive/.
+archive/
+
+# Database dumps anywhere in the tree
+*.sql
+*.sql.gz
+
+# Dependencies & local environment
+node_modules/
+.env
+local.settings.json
+
+# OS noise
+Thumbs.db
+.DS_Store
