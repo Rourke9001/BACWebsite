@@ -1,5 +1,4 @@
 {
-  "trailingSlash": "auto",
   "routes": [
     {
       "route": "/about.html",
