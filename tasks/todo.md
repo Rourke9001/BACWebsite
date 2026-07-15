@@ -15,10 +15,10 @@
 - [x] Unit tests: graph request shapes, token caching, non-202 failure, missing config
 - [x] npm test green (17/17)
 - [x] Entra app registration "BAC Website Contact Form" (appId 1d7da6a8-6ea2-4a27-8dcd-cbf59f13df75) + Mail.Send app role + SP
-- [ ] **Admin consent — BLOCKED on Global Admin** (rourke@ holds Exchange/Service Support/AI Admin only; consent needs Admin@BACSA.onmicrosoft.com)
-- [x] SWA app settings via az: EMAIL_PROVIDER=graph, GRAPH_TENANT_ID/CLIENT_ID/CLIENT_SECRET, CONTACT_RECIPIENT=rourke9001@gmail.com (test), CONTACT_FROM=donotreply@
-- [ ] Application access policy scoping app → donotreply@ (Exchange Online PowerShell; rourke@ has Exchange Admin, can run)
-- [x] Commit → develop (cb2dfab), Jira In Progress
+- [x] Admin consent granted by Global Admin (2026-07-15) — Mail.Send active
+- [x] SWA app settings via az: EMAIL_PROVIDER=graph, GRAPH_TENANT_ID/CLIENT_ID/CLIENT_SECRET, CONTACT_FROM=donotreply@; CONTACT_RECIPIENT tested with rourke9001@gmail.com, then switched to broughton@baclogistics.co.za (2026-07-15, verified applied)
+- [ ] Application access policy scoping app → donotreply@ (Exchange Online PowerShell; rourke@ has Exchange Admin, can run) — **last open hardening item**
+- [x] Commit → develop (cb2dfab), merged to main via PR #4, live E2E confirmed, Jira → Done (2026-07-15)
 
 ### Review
 - 17/17 unit tests pass; provider is dependency-free (Node 20 fetch), token cached with 60s early-refresh, non-202/again non-2xx token responses raise with trimmed Graph error detail.
@@ -32,12 +32,13 @@
 - [x] 14 HTML forms: action="/inc/form/action.php" → "/api/contact-form" (byte-exact replace, UTF-8 no BOM preserved)
 - [x] main.js: initFormTimestamps() stamps input[name=form_ts] at page load (min-fill gate live once deployed)
 - [x] Browser verification on local server: contact + service forms repointed, fresh epoch stamp each load (raw HTML still frozen), no console errors, form-less pages no-op
-- [ ] PR develop → main (user merges), SWA deploys
-- [ ] 3 end-to-end test enquiries from outside address incl. junk-folder checks (after admin consent + deploy)
-- [ ] Jira comment + transition
+- [x] PR #4 merged by user, SWA deployed
+- [x] Live E2E: production form → Graph → delivered to external Gmail test recipient (inbox), confirmed by Rourke (2026-07-15)
+- [x] Jira comment + transition → Done (2026-07-15)
 
 ### Review
-_(E2E pending admin consent + deploy)_
+- Full chain proven on production: form POST → /api/contact-form → Graph sendMail as donotreply@ → external delivery. Recipient then switched to broughton@ via CONTACT_RECIPIENT app setting (config-only, no redeploy).
+- Optional residual check: one service-page form submission to exercise the service_form path live (unit-tested; only form_id/subject differ from the proven contact path).
 
 
 ## BAC-8 — Contact-form Azure Function (2026-07-14)
@@ -97,4 +98,29 @@ _(E2E pending admin consent + deploy)_
   - blog-search/product-search: nothing to remove (0 refs in mirror).
   - `gl-`/`glht-` CSS class prefixes left alone — internal naming, not a visible provider reference; renaming would churn every page for no user-facing gain.
 - Not verifiable locally: SWA 301s, 404 rewrite, and MIME overrides need the Azure runtime — verify at BAC-11 deploy.
+
+
+## BAC-12 — Staging verification sweep incl. mobile (2026-07-15)
+
+### Checklist
+- [x] Build `scripts/verify-site.mjs` (zero-dep crawler, models `mirror.mjs`'s style): filesystem-driven page discovery (137 pages — the authoritative count; `sitemap.xml` has only 127 `<loc>` entries and is known-incomplete, README's "148" is a stale figure from an earlier count), config-driven redirect/404 checks, `site/files/` content-type checks, same-site reference extraction (href/src/poster/data-src/srcset/meta/CSS `url()`) against a small external-domain allowlist
+- [x] Baseline run against live staging (pre-fix): confirmed clean except 8 known-bad `gcz.co.za` URLs — proved the tool catches real bugs (red-then-green)
+- [x] Found + fixed 3 bug categories:
+  - 10 pages (About + 9 service pages) linked docs/one info page/one image to the agency's dev-preview domain `gcz.co.za` instead of local `site/files/`/`site/couch/uploads/` paths. Fetched the missing image fresh from the still-live `gcz.co.za` URL, SHA-256 hash-verified it against the same file in the gitignored local `archive/` backup (matched), stripped the literal URL prefix from all 10 files.
+  - 12 nav/CTA links on Home + About had a duplicated leading slash (`href="//about"`, `"//services/*.html"`, `"//contact/"`) resolving to bogus hosts instead of root-relative paths.
+  - 34 blog posts contain inline body-text links to 5 distinct old flat URLs (`/air-freight.html`, `/bonded-warehousing.html`, `/sea-freight.html`, `/contact.html`, one `/news/*.html` post) that 404 today. Fixed via 5 new redirect routes in `staticwebapp.config.json` mirroring the 4 already there, rather than editing every post.
+- [x] Feature branch → develop (merged), PR #5 (develop → main) opened — **not yet merged** (user merges per convention)
+- [x] Clean `verify-site.mjs` run against PR #5's Azure preview environment: 137/137 pages, 9/9 redirects, 404 ok, 6/6 files, 321/321 refs ok, 0 fail
+- [x] Manual Chrome walkthrough (desktop) of home/about/contact/one service page/blog index+post+pagination/video-hub/one info page/404 — all correct; clicked through the fixed doc-link and internal-link fixes live
+- [x] Mobile: `resize_window` tool doesn't work in this environment (confirmed 3× via `window.innerWidth`, stuck at 1920×1080) — worked around it with a headless Chrome screenshot (`chrome --headless=new --window-size=390,844`), a true 390px render. Found the hamburger trigger shows *alongside* the full desktop nav (not replacing it) at mobile width — confirmed via a side-by-side screenshot **pixel-identical to current live production** (`baclogistics.co.za`), so this is a pre-existing site characteristic, not a migration regression; out of scope to fix here. Mobile nav toggle JS logic verified separately by dispatching a real click in-page (`aria-expanded` flips, panel opens with 28 correctly root-relative links).
+- [x] Contact form: synthetic probe (`form_id=bogus_value`, rejected before spam/send logic) → expected 400 JSON, zero emails sent — per user's explicit decision to rely on BAC-10's already-proven real delivery rather than send another test email this round
+- [x] Confirmed "nothing public yet": `baclogistics.co.za` DNS still resolves to the old host (41.76.104.35), zero custom hostnames bound to the Azure Static Web App
+- [ ] User merges PR #5 → main
+- [ ] Final `verify-site.mjs` run + synthetic form probe against the real `ambitious-bush-...` default hostname (post-merge)
+- [ ] Jira comment + transition → Done (post-merge confirmation)
+
+### Review
+- Fable (advisor) review before planning caught an important sequencing issue: the default staging hostname only redeploys on push to `main`, so "fix it, then re-check staging" would have silently checked the stale, unfixed deployment. Verified against the PR preview environment instead (created on PR open, no merge needed).
+- Fable review before declaring done confirmed the "In Review, not Done" gate is correct per the ticket's literal wording ("on the *.azurestaticapps.net staging URL"), flagged the mobile-viewport gap (resolved via headless Chrome, above), and flagged that "every page loads with correct layout" is exhaustively proven for load/asset-resolution but only sampled for visual layout correctness (~10 template types) — noting that distinction here rather than overclaiming full-site pixel review.
+- `cd api && npm test` — untouched by this ticket, sanity-checked green.
 

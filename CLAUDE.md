@@ -6,7 +6,8 @@ Project context
 •baclogistics.co.za is being rebuilt as a static site on Azure Static Web Apps (app_location "site", api_location "api").
 •Plan of record: Jira project BAC on rourke9001.atlassian.net (17 tickets, phases P0–P7). Read BAC-1's comments for the audit summary, and each ticket's comments for rescoping notes, before starting it.
 •README.md documents the repo layout and all confirmed scope decisions.
-•site/ is the mirror of the live site (148 pages, blog pagination as /blog/pg/N/).
+•DESIGN.md documents the established design system (tokens, breakpoints, component patterns) — read it before any visual/UI change or new page/feature.
+•site/ is the mirror of the live site (137 pages, verified by direct filesystem count during BAC-12; blog pagination as /blog/pg/N/).
 
 Branching and Git
 •develop is the working branch; base feature branches off develop and merge them into develop.
