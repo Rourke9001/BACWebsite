@@ -19,6 +19,31 @@
       "route": "/high-value.html",
       "redirect": "/",
       "statusCode": 301
+    },
+    {
+      "route": "/air-freight.html",
+      "redirect": "/services/air-freight-services.html",
+      "statusCode": 301
+    },
+    {
+      "route": "/sea-freight.html",
+      "redirect": "/services/sea-freight-services.html",
+      "statusCode": 301
+    },
+    {
+      "route": "/bonded-warehousing.html",
+      "redirect": "/services/bonded-warehousing-services.html",
+      "statusCode": 301
+    },
+    {
+      "route": "/contact.html",
+      "redirect": "/contact/",
+      "statusCode": 301
+    },
+    {
+      "route": "/news/bac-logistics-south-africa-an-authorised-economic-operator-aeo.html",
+      "redirect": "/blog/bac-logistics-south-africa-an-authorised-economic-operator-aeo.html",
+      "statusCode": 301
     }
   ],
   "responseOverrides": {
