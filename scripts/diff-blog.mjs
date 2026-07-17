@@ -32,6 +32,7 @@ function divInner(html, openRe) {
 }
 
 function postFacts(html) {
+  const body = divInner(html, /<div class="gl-blog-article-body">/);
   return {
     title_tag: norm(grab(html, /<title>([\s\S]*?)<\/title>/)),
     canonical: grab(html, /<link rel="canonical" href="([^"]*)"/),
@@ -41,8 +42,8 @@ function postFacts(html) {
     date: norm(grab(html, /<span class="gl-blog-article-date">([\s\S]*?)<\/span>/)),
     tags: text(grab(html, /<p class="gl-blog-article-tags">([\s\S]*?)<\/p>/)),
     featured: grab(divInner(html, /<div class="gl-blog-article-image">/), /src="([^"]*)"/),
-    body_text: text(divInner(html, /<div class="gl-blog-article-body">/)),
-    body_images: [...divInner(html, /<div class="gl-blog-article-body">/).matchAll(/src="([^"]*)"/g)].map((m) => m[1]).join(' '),
+    body_text: text(body),
+    body_images: [...body.matchAll(/src="([^"]*)"/g)].map((m) => m[1]).join(' '),
     youtube: grab(html, /youtube\.com\/embed\/([A-Za-z0-9_-]+)/),
   };
 }
@@ -56,27 +57,32 @@ function listingFacts(html) {
       meta: text(divInner(m[1], /<div class="gl-blog-card-meta">/)),
     });
   }
-  const pagination = [...(grab(html, /<div class="pagination">([\s\S]*?)<\/div>/) || '')
+  const pagination = [...(divInner(html, /<div class="pagination">/) || '')
     .matchAll(/href="([^"]+)"/g)].map((m) => m[1]).join(' ');
   return { cards: JSON.stringify(cards), pagination };
 }
 
 let failures = 0;
 async function compare(label, urlPath, factsFn) {
-  const staticFile = urlPath === '/blog/' ? path.join(BLOG, 'index.html')
-    : urlPath.startsWith('/blog/pg/') ? path.join(BLOG, 'pg', urlPath.split('/')[3], 'index.html')
-    : path.join(BLOG, ...urlPath.replace('/blog/', '').split('/'));
-  const expected = factsFn(await readFile(staticFile, 'utf8'));
-  const res = await fetch(`${BASE}/api${urlPath}`, { redirect: 'manual' });
-  if (res.status !== 200) { console.log(`FAIL ${label}: HTTP ${res.status}`); failures++; return; }
-  const actual = factsFn(await res.text());
-  const diffs = Object.keys(expected).filter((k) => expected[k] !== actual[k]);
-  if (diffs.length) {
+  try {
+    const staticFile = urlPath === '/blog/' ? path.join(BLOG, 'index.html')
+      : urlPath.startsWith('/blog/pg/') ? path.join(BLOG, 'pg', urlPath.split('/')[3], 'index.html')
+      : path.join(BLOG, ...urlPath.replace('/blog/', '').split('/'));
+    const expected = factsFn(await readFile(staticFile, 'utf8'));
+    const res = await fetch(`${BASE}/api${urlPath}`, { redirect: 'manual' });
+    if (res.status !== 200) { console.log(`FAIL ${label}: HTTP ${res.status}`); failures++; return; }
+    const actual = factsFn(await res.text());
+    const diffs = Object.keys(expected).filter((k) => expected[k] !== actual[k]);
+    if (diffs.length) {
+      failures++;
+      console.log(`FAIL ${label}`);
+      for (const k of diffs) console.log(`  ${k}\n    static:   ${String(expected[k]).slice(0, 200)}\n    rendered: ${String(actual[k]).slice(0, 200)}`);
+    } else {
+      console.log(`ok   ${label}`);
+    }
+  } catch (err) {
     failures++;
-    console.log(`FAIL ${label}`);
-    for (const k of diffs) console.log(`  ${k}\n    static:   ${String(expected[k]).slice(0, 200)}\n    rendered: ${String(actual[k]).slice(0, 200)}`);
-  } else {
-    console.log(`ok   ${label}`);
+    console.log(`FAIL ${label}: ${err.message}`);
   }
 }
 
