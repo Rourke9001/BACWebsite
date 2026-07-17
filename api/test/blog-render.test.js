@@ -33,6 +33,9 @@ test('renderPost adds video, json_ld and robots only when present', () => {
   assert.ok(rich.includes('youtube.com/embed/lyvv36Vc2m4'));
   assert.ok(rich.includes('application/ld+json'));
   assert.ok(rich.includes('content="noindex"'));
+  const sneaky = render.renderPost(post({ json_ld: '{"x":"</script><img src=x>"}' }));
+  assert.ok(!sneaky.includes('</script><img'));
+  assert.ok(sneaky.includes('<\\/script>'));
 });
 
 test('folder posts get folder URLs', () => {

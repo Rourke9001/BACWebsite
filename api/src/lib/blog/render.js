@@ -97,7 +97,7 @@ function renderPost(post) {
     canonical: esc(canonical),
     og_image: esc(post.og_image),
     robots_meta: post.robots ? `<meta name="robots" content="${esc(post.robots)}" />` : '',
-    json_ld: post.json_ld ? `<script type="application/ld+json">\n${post.json_ld}\n</script>` : '',
+    json_ld: post.json_ld ? `<script type="application/ld+json">\n${post.json_ld.replace(/<\//g, '<\\/')}\n</script>` : '',
     article_section: renderArticleSection(post),
   });
 }
