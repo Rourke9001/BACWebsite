@@ -5,11 +5,13 @@
  * configured redirects + 404 page behave, and the downloadable docs serve
  * with the right content-type. Zero dependencies, mirrors mirror.mjs's style.
  *
- * The page list comes straight from the site/ filesystem (not sitemap.xml,
- * which is incomplete) and the redirects/mimeTypes come from
- * staticwebapp.config.json at runtime — nothing about the site is hardcoded,
- * so this keeps working as pages/redirects change and is reusable as-is for
- * a future production cutover check (BAC-16).
+ * The static page list comes straight from the site/ filesystem (not
+ * sitemap.xml, which is incomplete); the dynamic blog pages (BAC-13, served
+ * from Blob Storage via the Function) are enumerated from the live
+ * /sitemap-blog.xml instead, since they no longer exist on disk. Redirects
+ * and mimeTypes come from staticwebapp.config.json at runtime — nothing
+ * about the site is hardcoded, so this keeps working as pages/redirects
+ * change and is reusable as-is for a future production cutover check (BAC-16).
  *
  * Usage: node scripts/verify-site.mjs [base-url]
  * Exit code 0 = all clean, 1 = something failed (see report).
@@ -108,6 +110,22 @@ async function fetchFollow(url) {
   throw new Error(`>${MAX_REDIRECTS} redirects starting from ${url.href}`);
 }
 
+// BAC-13: blog pages are dynamic (blob-backed); enumerate them from the live
+// blog sitemap instead of the filesystem, plus derived pagination pages.
+async function blogUrls(base) {
+  let res;
+  try {
+    res = await fetch(new URL('/sitemap-blog.xml', base), { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(15000) });
+  } catch (e) {
+    throw new Error(`sitemap-blog.xml: fetch failed — ${e.message}`);
+  }
+  if (!res.ok) throw new Error(`sitemap-blog.xml: HTTP ${res.status}`);
+  const locs = [...(await res.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname);
+  const postCount = locs.filter((p) => p.endsWith('.html')).length;
+  for (let n = 1; n <= Math.max(1, Math.ceil(postCount / 12)); n++) locs.push(`/blog/pg/${n}/`);
+  return locs;
+}
+
 async function pool(items, worker, concurrency = CONCURRENCY) {
   const queue = items.slice();
   await Promise.all(Array.from({ length: concurrency }, async () => {
@@ -161,9 +179,11 @@ async function main() {
     else { filesFail++; brokenPages.push(`/files/${name} -> HTTP ${res.status}, content-type "${ctype}" (expected ${expected || 'any 2xx'})`); }
   });
 
-  // --- Discover + fetch every page straight from disk ---
+  // --- Discover + fetch every page straight from disk, plus the dynamic blog ---
   const pageFiles = await walkHtml(SITE);
-  const pages = pageFiles.map(f => ({ urlPath: toUrlPath(f) })).sort((a, b) => a.urlPath.localeCompare(b.urlPath));
+  const urls = pageFiles.map(toUrlPath);
+  urls.push(...await blogUrls(BASE));
+  const pages = urls.map(urlPath => ({ urlPath })).sort((a, b) => a.urlPath.localeCompare(b.urlPath));
   let pagesOk = 0, pagesFail = 0;
   const refsByPage = new Map(); // page.urlPath -> raw refs[]
 
@@ -255,7 +275,7 @@ async function main() {
   });
 
   // --- Report ---
-  console.log(`Pages:     ${pagesOk} ok, ${pagesFail} fail (of ${pages.length} discovered on disk)`);
+  console.log(`Pages:     ${pagesOk} ok, ${pagesFail} fail (of ${pages.length} discovered on disk + live blog sitemap)`);
   console.log(`Redirects: ${redirectsOk} ok, ${redirectsFail} fail`);
   console.log(`404 page:  ${notFoundOk ? 'ok' : 'FAIL'}`);
   console.log(`Files:     ${filesOk} ok, ${filesFail} fail (of ${fileNames.length} in site/files/)`);

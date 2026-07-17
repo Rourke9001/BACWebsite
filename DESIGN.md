@@ -5,6 +5,9 @@ The established visual design system for baclogistics.co.za, as it actually exis
 any visual/UI change, new page template, or new content-block type, so new work reuses what's
 already here instead of drifting from it.
 
+Blog page templates (BAC-13) live in `api/src/blog-templates/` — tokenized copies of the
+static markup, rendered server-side by the Function. Edit them there, not in `site/`.
+
 ## Design tokens
 
 All in `main.css`'s `:root`:
