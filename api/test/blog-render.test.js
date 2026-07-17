@@ -73,4 +73,6 @@ test('renderError produces branded page', () => {
   const html = render.renderError('Blog briefly unavailable', 'Try again shortly.');
   assert.ok(html.includes('Blog briefly unavailable'));
   assert.ok(!html.includes('{{'));
+  assert.ok(!html.includes('404'));
+  assert.ok(html.includes('<h1>Blog briefly unavailable</h1>'));
 });

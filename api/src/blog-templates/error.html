@@ -14,7 +14,7 @@
 	<link rel="manifest" href="/site.webmanifest">
 
 	<title>{{error_title}}</title>
-	<meta name="description" content="The page you are looking for could not be found." />
+	<meta name="description" content="{{error_message}}" />
 	<meta name="robots" content="noindex" />
 	<meta name="theme-color" content="#555" />
 
@@ -42,8 +42,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <body>
 	<div class="nf-card">
 	    <a href="/"><img src="/couch/uploads/image/header/bac-all_hdlogo2.png" alt="BAC Logistics"></a>
-	    <h1>404</h1>
-	    <h2>{{error_title}}</h2>
+	    <h1>{{error_title}}</h1>
 	    <p>{{error_message}}</p>
 	    <div class="nf-btns">
 		<a class="nf-home" href="/">Home</a>
