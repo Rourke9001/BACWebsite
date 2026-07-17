@@ -182,5 +182,18 @@ Old "Open decision points" all resolved: migration = convert all (as JSON, not
 markdown); CMS UI = in scope (custom, not Decap/Sveltia); governance = moot
 (content never touches the code pipeline); repo invariants = updated in-ticket.
 
-Next: implementation plan (superpowers:writing-plans), then build.
+Implementation plan (2026-07-17): `docs/superpowers/plans/2026-07-17-bac13-dynamic-blog.md`
+— 10 tasks following the spec's delivery order; checkboxes tracked in the plan file.
+Building on `feature/bac-13-dynamic-blog` (off develop).
+
+- [ ] Task 1: storage account + container + app settings (with user; billable — cents/mo)
+- [ ] Task 2: blob store + TTL cache modules + tests
+- [ ] Task 3: router + tokenized templates + renderer + tests
+- [ ] Task 4: public blog HTTP Function + tests
+- [ ] Task 5: migration script (90 posts -> JSON) + upload
+- [ ] Task 6: diff gate red-then-green vs deployed Function
+- [ ] Task 7: pre-cutover PR (1/2), then cutover PR (2/2): routes, delete static blog, sitemap split, verify-site, docs
+- [ ] Task 8: admin API (auth + CRUD + upload) + tests
+- [ ] Task 9: admin UI at /admin/ + emulator test
+- [ ] Task 10: Entra invitations, live E2E publish, author guide, Jira Done
 
