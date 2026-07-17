@@ -22,8 +22,8 @@ function guard(handler) {
   };
 }
 
-app.http('admin', {
-  methods: ['GET'], authLevel: 'anonymous', route: 'admin/posts',
+app.http('admin-posts-list', {
+  methods: ['GET'], authLevel: 'anonymous', route: 'blog-admin/posts',
   handler: guard(async () => {
     const posts = await getShared().store.loadAllPosts();
     posts.sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
@@ -35,7 +35,7 @@ app.http('admin', {
 });
 
 app.http('admin-post', {
-  methods: ['GET', 'PUT', 'DELETE'], authLevel: 'anonymous', route: 'admin/posts/{slug}',
+  methods: ['GET', 'PUT', 'DELETE'], authLevel: 'anonymous', route: 'blog-admin/posts/{slug}',
   handler: guard(async (request) => {
     const { store } = getShared();
     const slug = request.params.slug;
@@ -60,7 +60,7 @@ app.http('admin-post', {
 });
 
 app.http('admin-upload', {
-  methods: ['POST'], authLevel: 'anonymous', route: 'admin/upload',
+  methods: ['POST'], authLevel: 'anonymous', route: 'blog-admin/upload',
   handler: guard(async (request) => {
     const form = await request.formData().catch(() => null);
     const file = form && form.get('file');

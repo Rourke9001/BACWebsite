@@ -27,7 +27,7 @@ function slugify(s) {
 async function showList() {
   $('#adm-edit-view').hidden = true;
   $('#adm-list-view').hidden = false;
-  const posts = await api('/api/admin/posts');
+  const posts = await api('/api/blog-admin/posts');
   const tbody = $('#adm-table tbody');
   tbody.innerHTML = '';
   for (const p of posts) {
@@ -55,7 +55,7 @@ async function showEditor(slug) {
   $('#adm-edit-title').textContent = slug ? 'Edit post' : 'New post';
   setStatus('');
   if (slug) {
-    const p = await api(`/api/admin/posts/${slug}`);
+    const p = await api(`/api/blog-admin/posts/${slug}`);
     for (const f of ['title', 'name', 'author', 'featured_image', 'featured_image_alt', 'excerpt',
       'meta_title', 'meta_description', 'og_image', 'canonical_url', 'robots',
       'youtube_id', 'youtube_title', 'json_ld', 'date']) form.elements[f].value = p[f] || '';
@@ -102,9 +102,9 @@ async function save() {
   try {
     const oldSlug = state.editingSlug;
     setStatus('Saving…');
-    await api(`/api/admin/posts/${post.name}`, { method: 'PUT', body: JSON.stringify(post) });
+    await api(`/api/blog-admin/posts/${post.name}`, { method: 'PUT', body: JSON.stringify(post) });
     if (oldSlug && oldSlug !== post.name) {
-      await api(`/api/admin/posts/${oldSlug}`, { method: 'DELETE' });
+      await api(`/api/blog-admin/posts/${oldSlug}`, { method: 'DELETE' });
     }
     state.editingSlug = post.name;
     state.savedPost = post;
@@ -119,7 +119,7 @@ async function save() {
 async function uploadFile(file) {
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch('/api/admin/upload', { method: 'POST', body: fd });
+  const res = await fetch('/api/blog-admin/upload', { method: 'POST', body: fd });
   if (!res.ok) throw new Error(`upload failed (HTTP ${res.status})`);
   return (await res.json()).url;
 }
@@ -172,7 +172,7 @@ $('#adm-delete').addEventListener('click', async () => {
   if (!state.editingSlug) return;
   if (!confirm('Delete this post? (Old versions are kept in storage for rollback.)')) return;
   try {
-    await api(`/api/admin/posts/${state.editingSlug}`, { method: 'DELETE' });
+    await api(`/api/blog-admin/posts/${state.editingSlug}`, { method: 'DELETE' });
     showList();
   } catch (err) { setStatus(`Delete failed: ${err.message}`, 'err'); }
 });
