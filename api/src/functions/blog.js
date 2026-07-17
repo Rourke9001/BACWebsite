@@ -33,3 +33,6 @@ async function handler(request, context) {
 app.http('blog', { methods: ['GET', 'HEAD'], authLevel: 'anonymous', route: 'blog/{*path}', handler });
 app.http('blog-root', { methods: ['GET', 'HEAD'], authLevel: 'anonymous', route: 'blog', handler });
 app.http('sitemap-blog', { methods: ['GET'], authLevel: 'anonymous', route: 'sitemap-blog.xml', handler });
+
+// TEMP BAC-13 diagnostic: multi-segment route registered from this (known-working) file.
+app.http('admin-ping', { methods: ['GET'], authLevel: 'anonymous', route: 'admin/ping', handler: async () => ({ jsonBody: { ok: 'admin-ping-from-blog-js' } }) });
