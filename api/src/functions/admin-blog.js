@@ -22,7 +22,7 @@ function guard(handler) {
   };
 }
 
-app.http('admin-posts-list', {
+app.http('admin', {
   methods: ['GET'], authLevel: 'anonymous', route: 'admin/posts',
   handler: guard(async () => {
     const posts = await getShared().store.loadAllPosts();
