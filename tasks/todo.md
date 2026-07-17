@@ -186,11 +186,11 @@ Implementation plan (2026-07-17): `docs/superpowers/plans/2026-07-17-bac13-dynam
 — 10 tasks following the spec's delivery order; checkboxes tracked in the plan file.
 Building on `feature/bac-13-dynamic-blog` (off develop).
 
-- [ ] Task 1: storage account + container + app settings (with user; billable — cents/mo)
-- [ ] Task 2: blob store + TTL cache modules + tests
-- [ ] Task 3: router + tokenized templates + renderer + tests
-- [ ] Task 4: public blog HTTP Function + tests
-- [ ] Task 5: migration script (90 posts -> JSON) + upload
+- [x] Task 1: storage account + container + app settings (bacblogcontent, West Europe, LRS; versioning+30d retention; BLOG_STORAGE_CONNECTION set; done 2026-07-17, user authorized CLI creation)
+- [x] Task 2: blob store + TTL cache modules + tests (4b49f2e, review clean)
+- [x] Task 3: router + tokenized templates + renderer + tests (897210c + fix 319bb7d, review approved)
+- [x] Task 4: public blog HTTP Function + tests (8a6abcd, review approved)
+- [x] Task 5: migration script (90 posts -> JSON) + upload (scripts/migrate-blog.mjs; 90/90 with card data, 0 warnings; uploaded to bacblogcontent/blog/posts, verified count=90)
 - [ ] Task 6: diff gate red-then-green vs deployed Function
 - [ ] Task 7: pre-cutover PR (1/2), then cutover PR (2/2): routes, delete static blog, sitemap split, verify-site, docs
 - [ ] Task 8: admin API (auth + CRUD + upload) + tests
