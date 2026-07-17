@@ -191,9 +191,21 @@ Building on `feature/bac-13-dynamic-blog` (off develop).
 - [x] Task 3: router + tokenized templates + renderer + tests (897210c + fix 319bb7d, review approved)
 - [x] Task 4: public blog HTTP Function + tests (8a6abcd, review approved)
 - [x] Task 5: migration script (90 posts -> JSON) + upload (scripts/migrate-blog.mjs; 90/90 with card data, 0 warnings; uploaded to bacblogcontent/blog/posts, verified count=90)
-- [ ] Task 6: diff gate red-then-green vs deployed Function
-- [ ] Task 7: pre-cutover PR (1/2), then cutover PR (2/2): routes, delete static blog, sitemap split, verify-site, docs
+- [x] Task 6: diff gate red-then-green vs deployed Function (295a9f0; RED caught tamper, GREEN = ALL PAGES MATCH 99 pages; found+fixed numeric-entity bug)
+- [x] Task 7: PR #6 (Function, no routes) + PR #7 (cutover) both merged; production verify-site 137 pages 0 fail
 - [x] Task 8: admin API (auth + CRUD + upload) + tests (05ffcc1, review approved)
 - [x] Task 9: admin UI at /admin/ (400f774 + fix 8a97fd9, review approved; emulator/browser check before ship)
-- [ ] Task 10: Entra invitations, live E2E publish, author guide, Jira Done
+- [x] Task 10: invitations (rourke9001@gmail.com, rourke@, developer@), live E2E publish confirmed by Rourke ("live on site within seconds"), author guide docs/blog-author-guide.md, Jira Done (2026-07-18)
+
+### Review (BAC-13)
+- Shipped across PRs #6-#10: dynamic /blog/* from Blob Storage (90 posts migrated, all URLs preserved,
+  field-level diff gate ALL PAGES MATCH), Couch-style /admin/ behind SWA Entra auth (blog_author role),
+  zero-redeploy publishing proven live end-to-end.
+- Production incident during E2E: admin API 404s. Root cause (via Application Insights, now attached to
+  the SWA): the Functions host RESERVES the admin/ route prefix - functions errored at startup invisibly.
+  Fixed by moving the API to /api/blog-admin/* (PR #10). Full picture in tasks/lessons.md.
+- Azure resources added (all in rg-baclogistics-web): storage account bacblogcontent (LRS, versioning,
+  ~cents/mo) and App Insights bac-swa-debug + workspace bac-debug-logs (kept for host-level visibility, ~cents).
+- Follow-up candidates (non-blocking, from final review): direct unit tests for store deletePost/getMedia/
+  uploadImage; drafts/preview workflow if Ideation asks; delete App Insights if cost matters more than logs.
 
