@@ -22,7 +22,7 @@ function guard(handler) {
   };
 }
 
-app.http('admin-posts-list', {
+app.http('admin', {
   methods: ['GET'], authLevel: 'anonymous', route: 'admin/posts',
   handler: guard(async () => {
     const posts = await getShared().store.loadAllPosts();
@@ -76,6 +76,3 @@ app.http('admin-upload', {
     return { jsonBody: { url: `/blog/media/${name}` } };
   }),
 });
-
-// TEMP BAC-13 diagnostic: flat route registered from this (currently-404ing) file.
-app.http('adminping-flat', { methods: ['GET'], authLevel: 'anonymous', route: 'adminping', handler: async () => ({ jsonBody: { ok: 'flat-from-admin-blog-js' } }) });
