@@ -8,8 +8,8 @@ host to **Azure Static Web Apps** as a static rebuild. Plan and progress are tra
 
 | Path       | Purpose |
 |------------|---------|
-| `site/`    | The static site — deploy artifact for Azure SWA (`app_location`). The mirror of the live site lands here (BAC-6), preserving URL structure (`/about/`, `/services/*.html`, `/blog/`, `/video-hub/`, `/files/`). `staticwebapp.config.json` lives here too (BAC-7). |
-| `api/`     | Azure Functions — the contact/service form handler (BAC-8/9): honeypot + rate limiting, sends via Microsoft 365 to `info@baclogistics.co.za`. No Integrately webhooks, no third-party BCCs. |
+| `site/`    | The static site — deploy artifact for Azure SWA (`app_location`). The mirror of the live site lands here (BAC-6), preserving URL structure (`/about/`, `/services/*.html`, `/video-hub/`, `/files/`). `/blog/*` no longer lives here (BAC-13) — it's rewritten to the Function and served from Blob Storage. `staticwebapp.config.json` lives here too (BAC-7). |
+| `api/`     | Azure Functions (`api_location`): the contact/service form handler (BAC-8/9, honeypot + rate limiting, sends via Microsoft 365 to `info@baclogistics.co.za`, no Integrately webhooks/third-party BCCs) and the dynamic blog (BAC-13, renders `/blog/*` from the `blog` Blob Storage container). The Couch-style admin publishing API (BAC-13, `/admin/`) lands in a follow-up. |
 | `scripts/` | Mirror/crawl and rebuild tooling (BAC-6, BAC-13). |
 | `docs/`    | Runbooks: news-publishing how-to (BAC-13), cutover checklist (BAC-16). |
 | `archive/` | **Git-ignored, never committed.** Local copy of the old-site backup (CouchCMS source + SQL dump). Contains credentials and form-submission PII. The authoritative backup lives outside this folder. |
@@ -23,20 +23,24 @@ host to **Azure Static Web Apps** as a static rebuild. Plan and progress are tra
 - **No database on Azure.** The static site needs none. The SQL dump is an offline archive only; a final dump is taken at decommission (BAC-17) and stored privately outside git.
 - **DNS/email:** DNS stays at domains.co.za; only the two web records repoint at cutover. Email is on Microsoft 365 and must not be touched. Analytics: GTM-MPPHRHH.
 
-## Site inventory (from live sitemap, 2026-07-14)
+## Site inventory (post-cutover, BAC-13)
 
-~135 URLs: home, about, contact, services index + 13 service pages, blog index + ~95 posts,
-video hub + ~16 videos, 2 information pages (incl. privacy policy), 5 downloadable docs in `/files/`.
+38 static pages in `site/` (home, about, contact, services index + 13 service pages,
+video hub + ~16 videos, 2 information pages incl. privacy policy, 5 downloadable docs
+in `/files/`) plus ~99 blog posts served dynamically from Blob Storage via the Function.
 
 ## Local preview
 
-No PHP, no database, no build step — `site/` is plain files. Serve it with anything:
+`site/` itself is plain files, no build step — but `/blog/*` is now dynamic (BAC-13),
+so which server you run depends on what you need to check:
 
 ```powershell
+# Static pages only (no /blog/* — those routes 404 without the Function):
 cd site
 python -m http.server 8080     # then open http://localhost:8080
-# or, without Python:
-npx serve .
+
+# Full site including the dynamic blog:
+swa start site --api-location api
 ```
 
 Don't open the HTML files directly from disk (`file://`) — links are root-relative
@@ -52,20 +56,13 @@ Don't open the HTML files directly from disk (`file://`) — links are root-rela
 
 ## Publishing a blog post
 
-There is no server to update — a "publish" is just a merge to `main`, and the
-redeploy is automatic. Interim manual flow (until BAC-13 automates it):
-
-1. On `develop`: copy an existing post, e.g. `site/blog/what-is-bonded-warehousing.html`,
-   to a new filename; edit title/meta/content; drop the post image into
-   `site/couch/uploads/image/blog/`.
-2. Add the post's card to `site/blog/index.html` (and `site/sitemap.xml`).
-3. PR `develop` → `main`, merge — live a couple of minutes later.
-
-Step 2 is the clunky part (a new post should ripple through the pagination pages).
-BAC-13 replaces this with: write the post as **markdown**, a build script generates
-the post page + regenerates the blog listing/pagination/sitemap, CI deploys. Until
-then, an easier interim option is rerunning `node scripts/mirror.mjs` while the old
-CouchCMS site is still up — author the post in CouchCMS as before, re-mirror, commit.
+The blog is dynamic (BAC-13): Azure Functions render `/blog`, `/blog/*`, and
+`/sitemap-blog.xml` on request from post JSON + images stored in the `blog` Blob
+Storage container — there's no HTML in `site/` to edit and no deploy in the loop.
+Publishing happens through the `/admin/` Couch-style admin (BAC-13 follow-up): write
+the post, save, it's live immediately. Post pages, the listing, and pagination are
+all generated from the same blob data, so nothing can drift out of sync the way the
+old copy-an-HTML-file flow could.
 
 ## Sensitive data — read before committing
 

@@ -1,5 +1,8 @@
 {
   "routes": [
+    { "route": "/blog", "rewrite": "/api/blog" },
+    { "route": "/blog/*", "rewrite": "/api/blog" },
+    { "route": "/sitemap-blog.xml", "rewrite": "/api/sitemap-blog.xml" },
     {
       "route": "/about.html",
       "redirect": "/about/",
