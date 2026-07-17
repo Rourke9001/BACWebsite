@@ -42,8 +42,8 @@
 
             <form class="adm-form" id="adm-form">
                 <div class="adm-grid">
-                    <label>Title *<input name="title" required></label>
-                    <label>Slug (URL name) *<input name="name" pattern="[a-z0-9][a-z0-9-]*" required></label>
+                    <label>Title *<input name="title" maxlength="300" required></label>
+                    <label>Slug (URL name) *<input name="name" pattern="[a-z0-9][a-z0-9-]*" maxlength="100" required></label>
                     <label>Folder
                         <select name="folder">
                             <option value="">— none —</option>
@@ -54,15 +54,15 @@
                         </select>
                     </label>
                     <label>Date *<input name="date" type="date" required></label>
-                    <label>Author<input name="author" placeholder="BAC Logistics"></label>
-                    <label>Tags (comma-separated)<input name="tags"></label>
+                    <label>Author<input name="author" maxlength="100" placeholder="BAC Logistics"></label>
+                    <label>Tags (comma-separated)<input name="tags" maxlength="500"></label>
                 </div>
 
                 <fieldset class="adm-fieldset">
                     <legend>Featured image</legend>
                     <div class="adm-grid">
-                        <label>Image URL<input name="featured_image"></label>
-                        <label>Alt text<input name="featured_image_alt"></label>
+                        <label>Image URL<input name="featured_image" maxlength="1000"></label>
+                        <label>Alt text<input name="featured_image_alt" maxlength="300"></label>
                     </div>
                     <label class="adm-upload">Upload new image
                         <input type="file" id="adm-featured-file" accept=".png,.jpg,.jpeg,.webp,.gif">
@@ -90,16 +90,16 @@
                 <fieldset class="adm-fieldset">
                     <legend>SEO &amp; extras (optional)</legend>
                     <div class="adm-grid">
-                        <label>Meta title<input name="meta_title"></label>
-                        <label>Meta description<input name="meta_description"></label>
-                        <label>Card excerpt (HTML)<input name="excerpt"></label>
-                        <label>OG image URL<input name="og_image"></label>
-                        <label>Canonical URL<input name="canonical_url"></label>
-                        <label>Robots<input name="robots" placeholder="e.g. noindex"></label>
-                        <label>YouTube video ID<input name="youtube_id"></label>
-                        <label>YouTube title<input name="youtube_title"></label>
+                        <label>Meta title<input name="meta_title" maxlength="300"></label>
+                        <label>Meta description<input name="meta_description" maxlength="500"></label>
+                        <label>Card excerpt (HTML)<input name="excerpt" maxlength="2000"></label>
+                        <label>OG image URL<input name="og_image" maxlength="1000"></label>
+                        <label>Canonical URL<input name="canonical_url" maxlength="1000"></label>
+                        <label>Robots<input name="robots" maxlength="100" placeholder="e.g. noindex"></label>
+                        <label>YouTube video ID<input name="youtube_id" maxlength="20"></label>
+                        <label>YouTube title<input name="youtube_title" maxlength="300"></label>
                     </div>
-                    <label>JSON-LD<textarea name="json_ld" rows="4"></textarea></label>
+                    <label>JSON-LD<textarea name="json_ld" rows="4" maxlength="20000"></textarea></label>
                     <label class="adm-check"><input type="checkbox" name="unpublished"> Unpublished (hide from the site)</label>
                 </fieldset>
 
