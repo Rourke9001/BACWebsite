@@ -9,7 +9,7 @@ host to **Azure Static Web Apps** as a static rebuild. Plan and progress are tra
 | Path       | Purpose |
 |------------|---------|
 | `site/`    | The static site — deploy artifact for Azure SWA (`app_location`). The mirror of the live site lands here (BAC-6), preserving URL structure (`/about/`, `/services/*.html`, `/video-hub/`, `/files/`). `/blog/*` no longer lives here (BAC-13) — it's rewritten to the Function and served from Blob Storage. `staticwebapp.config.json` lives here too (BAC-7). |
-| `api/`     | Azure Functions (`api_location`): the contact/service form handler (BAC-8/9, honeypot + rate limiting, sends via Microsoft 365 to `info@baclogistics.co.za`, no Integrately webhooks/third-party BCCs) and the dynamic blog (BAC-13, renders `/blog/*` from the `blog` Blob Storage container). The Couch-style admin publishing API (BAC-13, `/admin/`) lands in a follow-up. |
+| `api/`     | Azure Functions (`api_location`): the contact/service form handler (BAC-8/9, honeypot + rate limiting, sends via Microsoft 365 to `info@baclogistics.co.za`, no Integrately webhooks/third-party BCCs) and the dynamic blog (BAC-13): public rendering of `/blog/*` from the `blog` Blob Storage container plus the role-guarded admin API (`/api/blog-admin/*`) behind the `/admin/` UI. |
 | `scripts/` | Mirror/crawl and rebuild tooling (BAC-6, BAC-13). |
 | `docs/`    | Runbooks: news-publishing how-to (BAC-13), cutover checklist (BAC-16). |
 | `archive/` | **Git-ignored, never committed.** Local copy of the old-site backup (CouchCMS source + SQL dump). Contains credentials and form-submission PII. The authoritative backup lives outside this folder. |
@@ -59,10 +59,13 @@ Don't open the HTML files directly from disk (`file://`) — links are root-rela
 The blog is dynamic (BAC-13): Azure Functions render `/blog`, `/blog/*`, and
 `/sitemap-blog.xml` on request from post JSON + images stored in the `blog` Blob
 Storage container — there's no HTML in `site/` to edit and no deploy in the loop.
-Publishing happens through the `/admin/` Couch-style admin (BAC-13 follow-up): write
-the post, save, it's live immediately. Post pages, the listing, and pagination are
-all generated from the same blob data, so nothing can drift out of sync the way the
-old copy-an-HTML-file flow could.
+Publishing happens through the `/admin/` Couch-style admin (Entra ID login,
+`blog_author` role via SWA invitation): write the post, save, it's live within a
+minute or two — see **[docs/blog-author-guide.md](docs/blog-author-guide.md)** for
+the author walkthrough. The admin API lives at `/api/blog-admin/*` (the `admin/`
+route prefix is reserved by the Functions host — see `tasks/lessons.md`). Post
+pages, the listing, and pagination are all generated from the same blob data, so
+nothing can drift out of sync the way the old copy-an-HTML-file flow could.
 
 ## Sensitive data — read before committing
 
