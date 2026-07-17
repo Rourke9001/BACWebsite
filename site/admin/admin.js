@@ -103,6 +103,8 @@ async function save() {
     setStatus('Saving…');
     await api(`/api/admin/posts/${post.name}`, { method: 'PUT', body: JSON.stringify(post) });
     state.editingSlug = post.name;
+    state.savedPost = post;
+    $('#adm-edit-title').textContent = 'Edit post';
     $('#adm-delete').hidden = false;
     setStatus('Saved. Live on the site within about a minute.', 'ok');
   } catch (err) {
