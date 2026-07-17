@@ -100,8 +100,12 @@ async function save() {
     post.migrated_order = state.savedPost.migrated_order;
   }
   try {
+    const oldSlug = state.editingSlug;
     setStatus('Saving…');
     await api(`/api/admin/posts/${post.name}`, { method: 'PUT', body: JSON.stringify(post) });
+    if (oldSlug && oldSlug !== post.name) {
+      await api(`/api/admin/posts/${oldSlug}`, { method: 'DELETE' });
+    }
     state.editingSlug = post.name;
     state.savedPost = post;
     $('#adm-edit-title').textContent = 'Edit post';
