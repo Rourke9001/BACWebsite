@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <meta name="robots" content="noindex">
+    <title>Blog Admin — BAC Logistics</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="stylesheet" href="/inc/css/main.css">
+    <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body class="adm">
+    <header class="adm-topbar">
+        <span class="adm-logo">BAC Logistics — Blog Admin</span>
+        <span class="adm-user" id="adm-user"></span>
+        <a class="adm-logout" href="/.auth/logout">Log out</a>
+    </header>
+
+    <main class="adm-main">
+        <!-- List view -->
+        <section id="adm-list-view">
+            <div class="adm-list-head">
+                <h1>Posts</h1>
+                <button class="adm-btn adm-btn-primary" id="adm-new">+ New post</button>
+            </div>
+            <table class="adm-table" id="adm-table">
+                <thead><tr><th>Title</th><th>Folder</th><th>Date</th><th>Status</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </section>
+
+        <!-- Editor view -->
+        <section id="adm-edit-view" hidden>
+            <div class="adm-list-head">
+                <h1 id="adm-edit-title">New post</h1>
+                <div>
+                    <button class="adm-btn" id="adm-back">&#171; Back to list</button>
+                    <button class="adm-btn adm-btn-primary" id="adm-save">Save &amp; publish</button>
+                </div>
+            </div>
+            <p class="adm-status" id="adm-status" role="status"></p>
+
+            <form class="adm-form" id="adm-form">
+                <div class="adm-grid">
+                    <label>Title *<input name="title" required></label>
+                    <label>Slug (URL name) *<input name="name" pattern="[a-z0-9][a-z0-9-]*" required></label>
+                    <label>Folder
+                        <select name="folder">
+                            <option value="">— none —</option>
+                            <option value="road-freight">Road Freight</option>
+                            <option value="customs-clearing">Customs Clearing</option>
+                            <option value="mining-transport">Mining Transport</option>
+                            <option value="liquor-transport">Liquor Transport</option>
+                        </select>
+                    </label>
+                    <label>Date *<input name="date" type="date" required></label>
+                    <label>Author<input name="author" placeholder="BAC Logistics"></label>
+                    <label>Tags (comma-separated)<input name="tags"></label>
+                </div>
+
+                <fieldset class="adm-fieldset">
+                    <legend>Featured image</legend>
+                    <div class="adm-grid">
+                        <label>Image URL<input name="featured_image"></label>
+                        <label>Alt text<input name="featured_image_alt"></label>
+                    </div>
+                    <label class="adm-upload">Upload new image
+                        <input type="file" id="adm-featured-file" accept=".png,.jpg,.jpeg,.webp,.gif">
+                    </label>
+                    <img id="adm-featured-preview" class="adm-preview" alt="" hidden>
+                </fieldset>
+
+                <fieldset class="adm-fieldset">
+                    <legend>Body *</legend>
+                    <div class="adm-toolbar" id="adm-toolbar">
+                        <button type="button" data-cmd="bold"><b>B</b></button>
+                        <button type="button" data-cmd="italic"><i>I</i></button>
+                        <button type="button" data-block="h2">H2</button>
+                        <button type="button" data-block="h3">H3</button>
+                        <button type="button" data-block="p">&para;</button>
+                        <button type="button" data-cmd="insertUnorderedList">&bull; List</button>
+                        <button type="button" data-cmd="insertOrderedList">1. List</button>
+                        <button type="button" id="adm-link">Link</button>
+                        <button type="button" id="adm-body-image">Image&#8230;</button>
+                        <input type="file" id="adm-body-file" accept=".png,.jpg,.jpeg,.webp,.gif" hidden>
+                    </div>
+                    <div class="adm-editor" id="adm-editor" contenteditable="true"></div>
+                </fieldset>
+
+                <fieldset class="adm-fieldset">
+                    <legend>SEO &amp; extras (optional)</legend>
+                    <div class="adm-grid">
+                        <label>Meta title<input name="meta_title"></label>
+                        <label>Meta description<input name="meta_description"></label>
+                        <label>Card excerpt (HTML)<input name="excerpt"></label>
+                        <label>OG image URL<input name="og_image"></label>
+                        <label>Canonical URL<input name="canonical_url"></label>
+                        <label>Robots<input name="robots" placeholder="e.g. noindex"></label>
+                        <label>YouTube video ID<input name="youtube_id"></label>
+                        <label>YouTube title<input name="youtube_title"></label>
+                    </div>
+                    <label>JSON-LD<textarea name="json_ld" rows="4"></textarea></label>
+                    <label class="adm-check"><input type="checkbox" name="unpublished"> Unpublished (hide from the site)</label>
+                </fieldset>
+
+                <div class="adm-danger">
+                    <button type="button" class="adm-btn adm-btn-danger" id="adm-delete" hidden>Delete post</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    <script src="/admin/admin.js"></script>
+</body>
+</html>

@@ -1,5 +1,9 @@
 {
   "routes": [
+    { "route": "/admin*", "allowedRoles": ["blog_author"] },
+    { "route": "/api/admin/*", "allowedRoles": ["blog_author"] },
+    { "route": "/.auth/login/github", "statusCode": 404 },
+    { "route": "/.auth/login/twitter", "statusCode": 404 },
     { "route": "/blog", "rewrite": "/api/blog" },
     { "route": "/blog/*", "rewrite": "/api/blog" },
     { "route": "/sitemap-blog.xml", "rewrite": "/api/sitemap-blog.xml" },
@@ -50,6 +54,7 @@
     }
   ],
   "responseOverrides": {
+    "401": { "redirect": "/.auth/login/aad?post_login_redirect_uri=/admin/", "statusCode": 302 },
     "404": {
       "rewrite": "/404.html",
       "statusCode": 404

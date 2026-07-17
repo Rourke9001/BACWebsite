@@ -193,7 +193,7 @@ Building on `feature/bac-13-dynamic-blog` (off develop).
 - [x] Task 5: migration script (90 posts -> JSON) + upload (scripts/migrate-blog.mjs; 90/90 with card data, 0 warnings; uploaded to bacblogcontent/blog/posts, verified count=90)
 - [ ] Task 6: diff gate red-then-green vs deployed Function
 - [ ] Task 7: pre-cutover PR (1/2), then cutover PR (2/2): routes, delete static blog, sitemap split, verify-site, docs
-- [ ] Task 8: admin API (auth + CRUD + upload) + tests
-- [ ] Task 9: admin UI at /admin/ + emulator test
+- [x] Task 8: admin API (auth + CRUD + upload) + tests (05ffcc1, review approved)
+- [x] Task 9: admin UI at /admin/ (400f774 + fix 8a97fd9, review approved; emulator/browser check before ship)
 - [ ] Task 10: Entra invitations, live E2E publish, author guide, Jira Done
 

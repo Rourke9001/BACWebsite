@@ -1,0 +1,40 @@
+/* BAC blog admin — Couch-style, DESIGN.md tokens, adm- prefix. */
+.adm { background: #f4f5f7; font-family: 'Roboto', sans-serif; color: var(--text); margin: 0; }
+.adm-topbar { display: flex; align-items: center; gap: 16px; padding: 14px 24px;
+  background: var(--brand-blue); color: #fff; }
+.adm-logo { font-weight: 700; }
+.adm-user { margin-left: auto; opacity: .8; font-size: .9rem; }
+.adm-logout { color: #fff; text-decoration: underline; }
+.adm-main { max-width: 1000px; margin: 32px auto; padding: 0 16px; }
+.adm-list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.adm-btn { min-height: 48px; padding: 10px 22px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); cursor: pointer; font: inherit; }
+.adm-btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.adm-btn-danger { background: #fff; border-color: var(--accent); color: var(--accent); }
+.adm-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.adm-table { width: 100%; border-collapse: collapse; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.adm-table th, .adm-table td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.adm-table tbody tr { cursor: pointer; }
+.adm-table tbody tr:hover { background: var(--accent-soft); }
+.adm-unpublished { color: var(--text-muted); font-style: italic; }
+.adm-form label { display: block; font-weight: 600; margin: 12px 0 4px; }
+.adm-form input, .adm-form select, .adm-form textarea { width: 100%; box-sizing: border-box;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; font: inherit; font-weight: 400; }
+.adm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+.adm-fieldset { border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); padding: 16px 20px; margin: 20px 0; }
+.adm-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.adm-toolbar button { min-height: 36px; padding: 4px 12px; border: 1px solid var(--border);
+  border-radius: 8px; background: #fff; cursor: pointer; font: inherit; }
+.adm-editor { min-height: 320px; background: #fff; border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px; line-height: 1.65; }
+.adm-editor:focus { outline: 2px solid var(--accent); }
+.adm-editor img { max-width: 100%; }
+.adm-preview { max-width: 240px; border-radius: 12px; margin-top: 8px; }
+.adm-status { min-height: 1.2em; font-weight: 600; }
+.adm-status.ok { color: #1a7f37; }
+.adm-status.err { color: var(--accent); }
+.adm-check input { width: auto; margin-right: 8px; }
+.adm-danger { margin: 24px 0; }
+@media (max-width: 700px) { .adm-grid { grid-template-columns: 1fr; } }
