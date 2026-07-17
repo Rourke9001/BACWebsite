@@ -15,6 +15,8 @@ const FOLDERS = ['road-freight', 'customs-clearing', 'mining-transport', 'liquor
 const grab = (html, re) => (html.match(re) || [])[1] ?? '';
 const norm = (s) => s.replace(/&nbsp;| /g, ' ').replace(/\s+/g, ' ').trim();
 const text = (html) => norm(html.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ')
+  .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+  .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16)))
   .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'"));
 
 function divInner(html, openRe) {
@@ -34,7 +36,7 @@ function divInner(html, openRe) {
 function postFacts(html) {
   const body = divInner(html, /<div class="gl-blog-article-body">/);
   return {
-    title_tag: norm(grab(html, /<title>([\s\S]*?)<\/title>/)),
+    title_tag: text(grab(html, /<title>([\s\S]*?)<\/title>/)),
     canonical: grab(html, /<link rel="canonical" href="([^"]*)"/),
     description: grab(html, /<meta name="description" content="([^"]*)"/),
     og_image: grab(html, /<meta property="og:image" content="([^"]*)"/),
