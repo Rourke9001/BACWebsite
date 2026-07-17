@@ -124,3 +124,63 @@
 - Fable review before declaring done confirmed the "In Review, not Done" gate is correct per the ticket's literal wording ("on the *.azurestaticapps.net staging URL"), flagged the mobile-viewport gap (resolved via headless Chrome, above), and flagged that "every page loads with correct layout" is exhaustively proven for load/asset-resolution but only sampled for visual layout correctness (~10 template types) — noting that distinction here rather than overclaiming full-site pixel review.
 - `cd api && npm test` — untouched by this ticket, sanity-checked green.
 
+
+## BAC-13 — Content/news workflow (2026-07-15) — brainstorming paused, blocked on real-world confirmation
+
+### Ticket (P4.1)
+"Set up the content source (markdown in the repo, or a lightweight headless CMS) and the auto rebuild-on-publish pipeline so adding news redeploys hands-off (~1–2 min). Write a short 'how to add a news post' guide for whoever authors content." Epic (BAC-1) locked decision: "Publish news via auto-rebuild-on-publish." Zero comments on BAC-13 itself yet; still "To Do".
+
+### Session recap (superpowers:brainstorming, Fable-advisor-reviewed)
+User opened by describing a pattern from an unrelated product (Utilifeed: blogs fetched client-side from a live CMS API at runtime — `UtfApi.getCmsBlogs()` into a MobX store — so publishing needs no app redeploy) and asked whether it applies to BAC-13. Clarifying questions established:
+- Utilifeed was illustrative only — no access to that infra, not a literal integration target.
+- Real driver: **non-technical publishing** — whoever writes posts shouldn't need git/markdown/PRs.
+- Explicit: "assume bare bones" — no appetite for a paid/hosted CMS product.
+- Main concern (verbatim): "how a new blog gets added, who will add it and what steps need to happen for the blog to appear on the website."
+- Also asked whether a CMS-flavored approach would "reduce storing the blogs on the website."
+
+### Draft recommendation (Fable-advisor-confirmed sound, and consistent with what README.md already sketches for BAC-13)
+**Approach 1**: markdown source (`content/blog/*.md`) is the only committed content artifact. A new zero-dependency-style Node build script (matching `mirror.mjs`/`verify-site.mjs`, plus one vetted markdown-parser dep — e.g. marked/markdown-it, not hand-rolled) renders posts and regenerates `site/blog/index.html`, `site/blog/pg/N/`, and the blog entries in `sitemap.xml`. Generation runs as a build step inside the GH Actions SWA workflow, so generated HTML is a **build artifact, not committed to git**. A non-technical authoring UI (git-backed CMS — Decap or Sveltia) can layer on top later, committing to the same markdown files on the author's behalf.
+Rejected: hosted CMS like Contentful/Sanity (new vendor + cost, contradicts "bare bones"); true runtime CMS-fetch, i.e. literally the Utilifeed pattern (contradicts BAC-1's locked auto-rebuild decision, hurts blog SEO/crawlability without prerendering this site doesn't have, needs a CMS backend service that doesn't exist for this project).
+
+### Open decision points (Fable advisor review) — resolve before writing the design doc
+- [ ] **Migration strategy for the ~95 existing posts** — not uniformly flat; some live under `site/blog/customs-clearing/`, `road-freight/`, `mining-transport/`, `liquor-transport/`. Options: back-convert all to markdown now (clean, single source of truth) vs. freeze as legacy HTML + pipeline only for new posts (faster, but permanently forks the blog into two systems and needs a legacy-metadata manifest just for pagination sort order) vs. partial (convert only the subdirectory posts). **User paused mid-answer here** — see blocker below.
+- [ ] **CMS UI scope** — include a git-backed editor (Decap/Sveltia) in BAC-13 itself, or split to a follow-up ticket? Decap/Sveltia need a real OAuth token-exchange backend (could live in `api/` next to the existing contact-form Function) — not literally zero-infra. Needs actual posting cadence to judge whether it's worth building now vs. ever (infrequent posts → GitHub's own web editor + a template may suffice indefinitely).
+- [ ] **Governance conflict** — any flow where publishing auto-commits straight to `main` violates this repo's binding "changes reach main only via PR" rule. Resolution is almost certainly: author/CMS commits open a PR, user still merges (consistent with every other ticket in this project) — "hands-off" but not "zero human step."
+- [ ] **Repo invariants** — README's "site/ is the mirror of the live site" framing, `verify-site.mjs`'s page-count assumptions (137, filesystem-counted), and the local-preview instructions all currently assume blog HTML exists in the checkout. Need updating in the same ticket if blog HTML becomes a pure build artifact.
+
+### Blocker — why we paused
+User surfaced that **Ideation** (the original site agency — already known from BAC-1's audit as the old provider behind the retired Integrately webhooks / `leads@ideation.co.za` BCC) is **still the active vendor for BAC's blog content and Instagram ads**, separate from site hosting/ownership (which this migration project has already moved to BAC's own Azure setup). Not yet known: the actual mechanics of how Ideation gets blog content published today (direct CouchCMS access? an Instagram→blog auto-push integration? manual handoff?), and whether that relationship/workflow continues after cutover. This directly determines "who authors" and what access/UI they need, so BAC-13's design is blocked on it pending real-world confirmation.
+
+### To resume
+Once Ideation's actual flow is confirmed, pick back up at the "Open decision points" checklist above, starting with the migration-strategy question. Follow-up prompt given to user in chat, 2026-07-15 session.
+
+### RESOLVED (2026-07-17) — design approved, supersedes the July draft
+Blocker cleared: Ideation publishes via direct CouchCMS login (`/couch` on the old
+site — walked through the live admin: Add New form with title/folder/featured
+image/rich-text body/tags/SEO fields). Relationship continues post-cutover; author
+account will be `developer@baclogistics.co.za`.
+
+**Pivot:** user wants *zero redeploys for content, ever* (a burst of 5 posts must
+not trigger builds) and a Couch-style username+password login (rejected
+Sveltia/GitHub OAuth). Approved architecture — full spec in
+`docs/superpowers/specs/2026-07-17-bac13-dynamic-blog-design.md`:
+- `/blog/*` served dynamically by the existing `api/` Functions app from Azure
+  Blob Storage (post JSON + images, blob versioning for rollback), ~60s cache,
+  serve-stale on storage failure. All existing blog URLs preserved. Static site
+  untouched.
+- Custom Couch-style admin at `/admin/` behind SWA built-in Entra ID auth
+  (`blog_author` role via invitation; zero custom auth code). Admin API in `api/`
+  re-checks the role per request. Publish-on-save, no drafts in v1.
+- Migrate all ~95 posts via one-off parser script, bodies kept as HTML;
+  red-then-green diff gate before deleting static blog pages from `site/`.
+- Sitemap → index (static + blob-generated blog sitemap). verify-site.mjs,
+  README, DESIGN.md updated same ticket.
+- Delivery order: storage → blog Function + migration (verified on PR preview) →
+  cutover PR → admin UI + E2E publish → author guide + Jira closeout.
+
+Old "Open decision points" all resolved: migration = convert all (as JSON, not
+markdown); CMS UI = in scope (custom, not Decap/Sveltia); governance = moot
+(content never touches the code pipeline); repo invariants = updated in-ticket.
+
+Next: implementation plan (superpowers:writing-plans), then build.
+
