@@ -36,3 +36,6 @@ app.http('sitemap-blog', { methods: ['GET'], authLevel: 'anonymous', route: 'sit
 
 // TEMP BAC-13 diagnostic: multi-segment route registered from this (known-working) file.
 app.http('admin-ping', { methods: ['GET'], authLevel: 'anonymous', route: 'admin/ping', handler: async () => ({ jsonBody: { ok: 'admin-ping-from-blog-js' } }) });
+
+// TEMP BAC-13 diagnostic 2: no 'admin' anywhere in the route.
+app.http('neutral-ping', { methods: ['GET'], authLevel: 'anonymous', route: 'manage/ping', handler: async () => ({ jsonBody: { ok: 'manage-ping' } }) });
