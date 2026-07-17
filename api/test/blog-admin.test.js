@@ -27,3 +27,11 @@ test('rejects invalid json_ld and oversized body', () => {
   assert.ok(validatePost({ ...valid, json_ld: '{nope' }).errors.length);
   assert.ok(validatePost({ ...valid, body: 'x'.repeat(600 * 1024) }).errors.length);
 });
+
+test('rejects overlong fields and tag abuse', () => {
+  assert.ok(validatePost({ ...valid, title: 'x'.repeat(301) }).errors.length);
+  assert.ok(validatePost({ ...valid, meta_description: 'x'.repeat(501) }).errors.length);
+  assert.ok(validatePost({ ...valid, tags: Array.from({ length: 21 }, (_, i) => `t${i}`) }).errors.length);
+  assert.ok(validatePost({ ...valid, tags: ['x'.repeat(101)] }).errors.length);
+  assert.deepStrictEqual(validatePost({ ...valid, title: 'x'.repeat(300) }).errors, []);
+});

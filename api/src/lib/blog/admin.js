@@ -3,6 +3,14 @@
 const { FOLDERS } = require('./router');
 
 const MAX_BODY_BYTES = 500 * 1024;
+// Per-field character caps, mirrored by maxlength attributes in site/admin/index.html.
+const FIELD_LIMITS = {
+  title: 300, author: 100, featured_image: 1000, featured_image_alt: 300,
+  excerpt: 2000, meta_title: 300, meta_description: 500, og_image: 1000,
+  canonical_url: 1000, robots: 100, json_ld: 20000, youtube_id: 20, youtube_title: 300,
+};
+const MAX_TAGS = 20;
+const MAX_TAG_LENGTH = 100;
 const STRING_FIELDS = ['author', 'featured_image', 'featured_image_alt', 'excerpt',
   'meta_title', 'meta_description', 'og_image', 'canonical_url', 'robots',
   'json_ld', 'youtube_id', 'youtube_title'];
@@ -26,7 +34,13 @@ function validatePost(input) {
   if (!post.body.trim()) errors.push('body is required');
   if (Buffer.byteLength(post.body, 'utf8') > MAX_BODY_BYTES) errors.push('body exceeds 500 KB');
   post.tags = Array.isArray(input.tags) ? input.tags.map(str).filter(Boolean) : [];
+  if (post.tags.length > MAX_TAGS) errors.push(`no more than ${MAX_TAGS} tags`);
+  if (post.tags.some((t) => t.length > MAX_TAG_LENGTH)) errors.push(`each tag must be ${MAX_TAG_LENGTH} characters or fewer`);
   for (const f of STRING_FIELDS) post[f] = str(input[f]);
+  if (post.title.length > FIELD_LIMITS.title) errors.push(`title exceeds ${FIELD_LIMITS.title} characters`);
+  for (const f of STRING_FIELDS) {
+    if (post[f].length > FIELD_LIMITS[f]) errors.push(`${f} exceeds ${FIELD_LIMITS[f]} characters`);
+  }
   if (post.json_ld) {
     try { JSON.parse(post.json_ld); } catch { errors.push('json_ld must be valid JSON'); }
   }
