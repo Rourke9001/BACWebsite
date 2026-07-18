@@ -209,3 +209,36 @@ Building on `feature/bac-13-dynamic-blog` (off develop).
 - Follow-up candidates (non-blocking, from final review): direct unit tests for store deletePost/getMedia/
   uploadImage; drafts/preview workflow if Ideation asks; delete App Insights if cost matters more than logs.
 
+
+## Session 2026-07-18 — BAC-12 closeout, BAC-14/BAC-2 domains, admin UX refinements
+
+Plan of record: `~/.claude/plans/soft-greeting-newt.md` (approved).
+
+### A. BAC-12 closeout
+- [ ] Re-run `node scripts/verify-site.mjs` against the SWA default hostname
+- [ ] Comment result on BAC-12 + transition to Done
+
+### B. BAC-14 custom domains + BAC-2 (guided; Rourke runs the DNS panel)
+- [ ] `az staticwebapp show` — resource group, defaultHostname, stableInboundIP
+- [ ] Present + run (with go-ahead) `hostname set` for apex + www, dns-txt-token
+- [ ] Hand over both TXT records exactly as Azure specifies (MX/SPF/DKIM untouched)
+- [ ] BAC-2: Rourke confirms domain/DNS vs hosting are separate line items (+ ALIAS/ANAME availability)
+- [ ] Poll `hostname list` until validated + managed certs issued
+- [ ] BAC-14 comment: cutover targets for BAC-15/16 + re-issue blog_author invitations reminder; transition
+- [ ] BAC-2 comment + Done
+
+### C. Admin/blog UX refinements (branch feature/admin-ux off develop)
+- [ ] Read DESIGN.md
+- [ ] C1: "View site" link in admin header
+- [ ] C2: publish success → back to list + dismissible banner with View post link
+- [ ] C3: Documents tab — UI + `/blog-admin/documents` API (pdf/doc/docx/xls/xlsx, 20MB, stable names, blob `documents/` prefix) + public `/documents/<name>` route
+- [ ] C4: blog pagination in-place swap (progressive enhancement in main.js)
+- [ ] Tests: api npm test + function-file require smoke
+- [ ] PR preview E2E verification (banner, docs upload/serve, pagination swap), verify-site.mjs on preview
+- [ ] Rourke deletes Test Blog via /admin; confirm gone from /blog/
+- [ ] Jira: create admin-UX task, comment, transition
+- [ ] Memory session note update
+
+### Review
+(to fill at session end)
+

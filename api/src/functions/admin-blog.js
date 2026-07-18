@@ -1,7 +1,7 @@
 'use strict';
 
 const { app } = require('@azure/functions');
-const { requireRole } = require('../lib/blog/auth');
+const { guardRole } = require('../lib/blog/auth');
 const { validatePost } = require('../lib/blog/admin');
 const { getShared } = require('./blog');
 
@@ -9,18 +9,7 @@ const IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', w
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 // Every admin endpoint re-verifies the role; route rules alone don't protect the API contract.
-function guard(handler) {
-  return async (request, context) => {
-    const denied = requireRole(request, 'blog_author');
-    if (denied) return denied;
-    try {
-      return await handler(request, context);
-    } catch (err) {
-      context.error(err);
-      return { status: 500, jsonBody: { error: 'Server error.' } };
-    }
-  };
-}
+const guard = (handler) => guardRole('blog_author', handler);
 
 app.http('admin-posts-list', {
   methods: ['GET'], authLevel: 'anonymous', route: 'blog-admin/posts',

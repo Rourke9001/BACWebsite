@@ -260,6 +260,51 @@
         });
     }
 
+    function initBlogPagination() {
+        // Progressive enhancement for /blog/ pagination: fetch the next page in
+        // the background and swap the card grid + pagination in place, instead
+        // of a full page reload. URLs, SEO and no-JS behavior are unchanged —
+        // the server still renders every /blog/pg/N/ page; any failure falls
+        // back to a normal navigation.
+        var grid = document.getElementById('gl-blog-grid');
+        var paginate = document.getElementById('b-paginate');
+        if (!grid || !paginate || !window.fetch || !window.DOMParser ||
+            !(window.history && window.history.pushState) || !Element.prototype.closest) return;
+
+        function loadPage(url, push) {
+            fetch(url).then(function (res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.text();
+            }).then(function (html) {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var newGrid = doc.getElementById('gl-blog-grid');
+                var newPaginate = doc.getElementById('b-paginate');
+                if (!newGrid || !newPaginate) throw new Error('unexpected markup');
+                grid.innerHTML = newGrid.innerHTML;
+                paginate.innerHTML = newPaginate.innerHTML;
+                if (push) history.pushState(null, '', url);
+                window.scrollTo(0, 0);
+            }).catch(function () {
+                window.location.href = url;
+            });
+        }
+
+        paginate.addEventListener('click', function (e) {
+            var link = e.target.closest('a');
+            if (!link || !paginate.contains(link)) return;
+            var href = link.getAttribute('href');
+            if (!/^\/blog\/pg\/\d+\/$/.test(href)) return;
+            e.preventDefault();
+            loadPage(href, true);
+        });
+
+        window.addEventListener('popstate', function () {
+            if (/^\/blog(\/pg\/\d+\/)?$/.test(window.location.pathname)) {
+                loadPage(window.location.pathname, false);
+            }
+        });
+    }
+
     $(function () {
         setActiveNavLink();
         initMobileNav();
@@ -267,5 +312,6 @@
         initFaqs();
         initCounters();
         initFormTimestamps();
+        initBlogPagination();
     });
 }(jQuery));
