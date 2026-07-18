@@ -165,6 +165,11 @@ async function main() {
   const notFoundOk = notFoundRes.status === 404 && notFoundBody.includes('Page Not Found | BAC Logistics');
   if (!notFoundOk) brokenPages.push(`404 check -> HTTP ${notFoundRes.status}, expected branded 404.html body`);
 
+  // --- /admin/ is auth-guarded (blog_author): anonymous GET must land on the Entra login ---
+  const adminRes = await fetch(new URL('/admin/', BASE).href, { headers: { 'user-agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(15000) });
+  const adminOk = adminRes.redirected && new URL(adminRes.url).hostname === 'login.microsoftonline.com';
+  if (!adminOk) brokenPages.push(`/admin/ auth guard -> expected redirect to login.microsoftonline.com, got HTTP ${adminRes.status} at ${adminRes.url}`);
+
   // --- site/files/ downloadable docs ---
   const mimeMap = config.mimeTypes || {};
   const fileNames = await readdir(path.join(SITE, 'files'));
@@ -181,7 +186,8 @@ async function main() {
 
   // --- Discover + fetch every page straight from disk, plus the dynamic blog ---
   const pageFiles = await walkHtml(SITE);
-  const urls = pageFiles.map(toUrlPath);
+  // /admin/* is role-guarded and checked above as the auth-guard probe, not as a public page.
+  const urls = pageFiles.map(toUrlPath).filter((u) => !u.startsWith('/admin/'));
   urls.push(...await blogUrls(BASE));
   const pages = urls.map(urlPath => ({ urlPath })).sort((a, b) => a.urlPath.localeCompare(b.urlPath));
   let pagesOk = 0, pagesFail = 0;
@@ -278,6 +284,7 @@ async function main() {
   console.log(`Pages:     ${pagesOk} ok, ${pagesFail} fail (of ${pages.length} discovered on disk + live blog sitemap)`);
   console.log(`Redirects: ${redirectsOk} ok, ${redirectsFail} fail`);
   console.log(`404 page:  ${notFoundOk ? 'ok' : 'FAIL'}`);
+  console.log(`Admin:     ${adminOk ? 'auth guard ok' : 'FAIL'}`);
   console.log(`Files:     ${filesOk} ok, ${filesFail} fail (of ${fileNames.length} in site/files/)`);
   console.log(`Refs:      ${refsOk} ok, ${refsFail} fail, ${externalCount} external (allowlisted, not fetched)`);
 
@@ -293,7 +300,7 @@ async function main() {
     }
   }
 
-  const clean = pagesFail === 0 && redirectsFail === 0 && notFoundOk && filesFail === 0 && brokenRefs.size === 0;
+  const clean = pagesFail === 0 && redirectsFail === 0 && notFoundOk && adminOk && filesFail === 0 && brokenRefs.size === 0;
   console.log(clean ? '\nAll checks passed.' : '\nFAILED — see above.');
   process.exitCode = clean ? 0 : 1;
 }

@@ -1,7 +1,8 @@
 'use strict';
 
 // Blob-backed post store. The ContainerClient is injected so tests can use fakes.
-// Layout: posts/<slug>.json (one post per blob), uploads/<file> (images).
+// Layout: posts/<slug>.json (one post per blob), uploads/<file> (images),
+// documents/<file> (site documents, e.g. terms & conditions).
 
 async function streamToBuffer(readable) {
   const chunks = [];
@@ -47,23 +48,56 @@ function createBlogStore(containerClient) {
     },
 
     async getMedia(file) {
-      try {
-        const res = await containerClient.getBlobClient(`uploads/${file}`).download();
-        return {
-          buffer: await streamToBuffer(res.readableStreamBody),
-          contentType: res.contentType || 'application/octet-stream',
-        };
-      } catch (err) {
-        if (err.statusCode === 404) return null;
-        throw err;
-      }
+      return downloadBinary(`uploads/${file}`);
     },
 
     async uploadImage(name, buffer, contentType) {
-      await containerClient.getBlockBlobClient(`uploads/${name}`).upload(
-        buffer, buffer.length, { blobHTTPHeaders: { blobContentType: contentType } });
+      await uploadBinary(`uploads/${name}`, buffer, contentType);
+    },
+
+    async listDocuments() {
+      const docs = [];
+      for await (const blob of containerClient.listBlobsFlat({ prefix: 'documents/' })) {
+        docs.push({
+          name: blob.name.slice('documents/'.length),
+          size: (blob.properties && blob.properties.contentLength) || null,
+          lastModified: blob.properties && blob.properties.lastModified
+            ? new Date(blob.properties.lastModified).toISOString() : null,
+        });
+      }
+      return docs;
+    },
+
+    async getDocument(file) {
+      return downloadBinary(`documents/${file}`);
+    },
+
+    async uploadDocument(name, buffer, contentType) {
+      await uploadBinary(`documents/${name}`, buffer, contentType);
+    },
+
+    async deleteDocument(name) {
+      await containerClient.getBlobClient(`documents/${name}`).deleteIfExists();
     },
   };
+
+  async function downloadBinary(blobName) {
+    try {
+      const res = await containerClient.getBlobClient(blobName).download();
+      return {
+        buffer: await streamToBuffer(res.readableStreamBody),
+        contentType: res.contentType || 'application/octet-stream',
+      };
+    } catch (err) {
+      if (err.statusCode === 404) return null;
+      throw err;
+    }
+  }
+
+  async function uploadBinary(blobName, buffer, contentType) {
+    await containerClient.getBlockBlobClient(blobName).upload(
+      buffer, buffer.length, { blobHTTPHeaders: { blobContentType: contentType } });
+  }
 }
 
 module.exports = { createBlogStore };
