@@ -11,12 +11,24 @@
 </head>
 <body class="adm">
     <header class="adm-topbar">
-        <span class="adm-logo">BAC Logistics — Blog Admin</span>
+        <span class="adm-logo">BAC Logistics — Admin</span>
         <span class="adm-user" id="adm-user"></span>
+        <a class="adm-viewsite" href="/">View site &#8599;</a>
         <a class="adm-logout" href="/.auth/logout">Log out</a>
     </header>
 
     <main class="adm-main">
+        <div class="adm-banner" id="adm-banner" role="status" hidden>
+            <span id="adm-banner-msg"></span>
+            <a id="adm-banner-link" href="/blog/" target="_blank" rel="noopener" hidden>View post &#8599;</a>
+            <button type="button" class="adm-banner-close" id="adm-banner-close" aria-label="Dismiss">&#215;</button>
+        </div>
+
+        <nav class="adm-tabs">
+            <button type="button" class="adm-tab active" id="adm-tab-posts">Posts</button>
+            <button type="button" class="adm-tab" id="adm-tab-docs">Documents</button>
+        </nav>
+
         <!-- List view -->
         <section id="adm-list-view">
             <div class="adm-list-head">
@@ -107,6 +119,26 @@
                     <button type="button" class="adm-btn adm-btn-danger" id="adm-delete" hidden>Delete post</button>
                 </div>
             </form>
+        </section>
+
+        <!-- Documents view -->
+        <section id="adm-docs-view" hidden>
+            <div class="adm-list-head">
+                <h1>Documents</h1>
+                <label class="adm-btn adm-btn-primary adm-upload-btn">Upload document
+                    <input type="file" id="adm-doc-file" accept=".pdf,.doc,.docx,.xls,.xlsx" hidden>
+                </label>
+            </div>
+            <p class="adm-status" id="adm-docs-status" role="status"></p>
+            <p class="adm-hint">For site documents like terms &amp; conditions and policies.
+                Each file gets a permanent link at <code>/documents/&lt;name&gt;</code> — nothing on the
+                site links to it until we wire it in, but the link works and can be shared.
+                Re-uploading a file with the same name replaces it at the same link.
+                PDF, Word or Excel; max 20&nbsp;MB.</p>
+            <table class="adm-table" id="adm-docs-table">
+                <thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th class="adm-col-actions"></th></tr></thead>
+                <tbody></tbody>
+            </table>
         </section>
     </main>
     <script src="/admin/admin.js"></script>

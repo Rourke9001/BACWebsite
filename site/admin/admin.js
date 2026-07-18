@@ -23,9 +23,33 @@ function slugify(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100);
 }
 
+// Mirrors render.js's postUrlPath() on the server.
+function postUrl(post) {
+  return post.folder ? `/blog/${post.folder}/${post.name}.html` : `/blog/${post.name}.html`;
+}
+
+function showBanner(msg, url) {
+  $('#adm-banner-msg').textContent = msg;
+  const link = $('#adm-banner-link');
+  link.hidden = !url;
+  if (url) link.href = url;
+  $('#adm-banner').hidden = false;
+}
+
+function hideBanner() {
+  $('#adm-banner').hidden = true;
+}
+
+function selectTab(which) {
+  $('#adm-tab-posts').classList.toggle('active', which === 'posts');
+  $('#adm-tab-docs').classList.toggle('active', which === 'docs');
+}
+
 // ---- list view ----------------------------------------------------------
 async function showList() {
+  selectTab('posts');
   $('#adm-edit-view').hidden = true;
+  $('#adm-docs-view').hidden = true;
   $('#adm-list-view').hidden = false;
   const posts = await api('/api/blog-admin/posts');
   const tbody = $('#adm-table tbody');
@@ -45,6 +69,9 @@ async function showList() {
 
 // ---- editor view --------------------------------------------------------
 async function showEditor(slug) {
+  hideBanner();
+  selectTab('posts');
+  $('#adm-docs-view').hidden = true;
   const form = $('#adm-form');
   form.reset();
   $('#adm-editor').innerHTML = '';
@@ -108,11 +135,18 @@ async function save() {
     }
     state.editingSlug = post.name;
     state.savedPost = post;
-    $('#adm-edit-title').textContent = 'Edit post';
-    $('#adm-delete').hidden = false;
-    setStatus('Saved. Live on the site within about a minute.', 'ok');
   } catch (err) {
     setStatus(`Save failed: ${err.message}`, 'err');
+    return;
+  }
+  // Land back on the post list with an unmissable confirmation instead of
+  // leaving the filled-in form on screen. The save has succeeded at this
+  // point, so a failed list reload must not mask the confirmation.
+  await showList().catch(() => {});
+  if (post.unpublished) {
+    showBanner(`"${post.title}" saved as unpublished — it is hidden from the site.`, null);
+  } else {
+    showBanner(`"${post.title}" published — live on the site within about a minute.`, postUrl(post));
   }
 }
 
@@ -124,7 +158,120 @@ async function uploadFile(file) {
   return (await res.json()).url;
 }
 
+// ---- documents view -----------------------------------------------------
+function setDocsStatus(msg, cls) {
+  const el = $('#adm-docs-status');
+  el.textContent = msg;
+  el.className = 'adm-status' + (cls ? ' ' + cls : '');
+}
+
+function formatBytes(n) {
+  if (typeof n !== 'number') return '—';
+  if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  if (n >= 1024) return Math.round(n / 1024) + ' KB';
+  return n + ' B';
+}
+
+async function showDocs() {
+  hideBanner();
+  selectTab('docs');
+  $('#adm-list-view').hidden = true;
+  $('#adm-edit-view').hidden = true;
+  $('#adm-docs-view').hidden = false;
+  const docs = await api('/api/blog-admin/documents');
+  const tbody = $('#adm-docs-table tbody');
+  tbody.innerHTML = '';
+  for (const d of docs) {
+    const tr = document.createElement('tr');
+
+    const nameTd = document.createElement('td');
+    const link = document.createElement('a');
+    link.href = d.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = d.name;
+    nameTd.appendChild(link);
+    tr.appendChild(nameTd);
+
+    for (const v of [formatBytes(d.size), d.lastModified ? d.lastModified.slice(0, 10) : '—']) {
+      const td = document.createElement('td');
+      td.textContent = v;
+      tr.appendChild(td);
+    }
+
+    const actions = document.createElement('td');
+    actions.className = 'adm-doc-actions';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'adm-btn adm-btn-small';
+    copyBtn.textContent = 'Copy link';
+    copyBtn.addEventListener('click', async () => {
+      const url = location.origin + d.url;
+      try {
+        await navigator.clipboard.writeText(url);
+        setDocsStatus('Link copied to clipboard.', 'ok');
+      } catch {
+        setDocsStatus(`Link: ${url}`, 'ok');
+      }
+    });
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'adm-btn adm-btn-small adm-btn-danger';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm(`Delete "${d.name}"? Its /documents/ link will stop working.`)) return;
+      try {
+        await api(`/api/blog-admin/documents/${d.name}`, { method: 'DELETE' });
+        await showDocs();
+        setDocsStatus(`Deleted ${d.name}.`, 'ok');
+      } catch (err) {
+        setDocsStatus(`Delete failed: ${err.message}`, 'err');
+      }
+    });
+    actions.append(copyBtn, delBtn);
+    tr.appendChild(actions);
+    tbody.appendChild(tr);
+  }
+  if (!docs.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 4;
+    td.textContent = 'No documents uploaded yet.';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+}
+
 // ---- wiring -------------------------------------------------------------
+$('#adm-tab-posts').addEventListener('click', () => {
+  hideBanner();
+  showList().catch((err) => setStatus(`Could not load posts: ${err.message}`, 'err'));
+});
+$('#adm-tab-docs').addEventListener('click', () =>
+  showDocs().catch((err) => setDocsStatus(`Could not load documents: ${err.message}`, 'err')));
+$('#adm-banner-close').addEventListener('click', hideBanner);
+$('#adm-doc-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    setDocsStatus('Uploading…');
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/blog-admin/documents', { method: 'POST', body: fd });
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try { detail = (await res.json()).error || detail; } catch {}
+      throw new Error(detail);
+    }
+    const doc = await res.json();
+    await showDocs();
+    setDocsStatus(`Uploaded — link: ${location.origin}${doc.url}`, 'ok');
+  } catch (err) {
+    setDocsStatus(`Upload failed: ${err.message}`, 'err');
+  }
+});
+
 $('#adm-new').addEventListener('click', () => showEditor(null));
 $('#adm-back').addEventListener('click', () => showList());
 $('#adm-save').addEventListener('click', save);

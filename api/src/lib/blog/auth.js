@@ -21,4 +21,18 @@ function requireRole(request, role) {
   return null;
 }
 
-module.exports = { getClientPrincipal, requireRole };
+// Wraps an admin handler: role check up front, uniform 500 on unexpected errors.
+function guardRole(role, handler) {
+  return async (request, context) => {
+    const denied = requireRole(request, role);
+    if (denied) return denied;
+    try {
+      return await handler(request, context);
+    } catch (err) {
+      context.error(err);
+      return { status: 500, jsonBody: { error: 'Server error.' } };
+    }
+  };
+}
+
+module.exports = { getClientPrincipal, requireRole, guardRole };

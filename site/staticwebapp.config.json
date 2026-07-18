@@ -27,6 +27,10 @@
       "rewrite": "/api/sitemap-blog.xml"
     },
     {
+      "route": "/documents/*",
+      "rewrite": "/api/documents"
+    },
+    {
       "route": "/about.html",
       "redirect": "/about/",
       "statusCode": 301
