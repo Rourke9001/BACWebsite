@@ -299,7 +299,9 @@
         });
 
         window.addEventListener('popstate', function () {
-            if (/^\/blog(\/pg\/\d+\/)?$/.test(window.location.pathname)) {
+            // Matches /blog, /blog/ and /blog/pg/N/ — the only URLs this
+            // enhancement can have put into the history stack.
+            if (/^\/blog(\/(pg\/\d+\/)?)?$/.test(window.location.pathname)) {
                 loadPage(window.location.pathname, false);
             }
         });
