@@ -60,7 +60,8 @@ function createBlogStore(containerClient) {
       for await (const blob of containerClient.listBlobsFlat({ prefix: 'documents/' })) {
         docs.push({
           name: blob.name.slice('documents/'.length),
-          size: (blob.properties && blob.properties.contentLength) || null,
+          size: blob.properties && typeof blob.properties.contentLength === 'number'
+            ? blob.properties.contentLength : null,
           lastModified: blob.properties && blob.properties.lastModified
             ? new Date(blob.properties.lastModified).toISOString() : null,
         });

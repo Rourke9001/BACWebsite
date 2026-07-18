@@ -10,7 +10,12 @@ const { getShared } = require('./blog');
 async function handler(request, context) {
   const original = request.headers.get('x-ms-original-url');
   const pathname = original ? new URL(original).pathname : new URL(request.url).pathname;
-  const file = decodeURIComponent(pathname.replace(/^\/api(?=\/)/, '').replace(/^\/documents\//, ''));
+  let file;
+  try {
+    file = decodeURIComponent(pathname.replace(/^\/api(?=\/)/, '').replace(/^\/documents\//, ''));
+  } catch {
+    return { status: 404, body: 'Not found' };
+  }
   if (!isStoredDocName(file)) return { status: 404, body: 'Not found' };
 
   const doc = await getShared().store.getDocument(file).catch((err) => {

@@ -135,16 +135,18 @@ async function save() {
     }
     state.editingSlug = post.name;
     state.savedPost = post;
-    // Land back on the post list with an unmissable confirmation instead of
-    // leaving the filled-in form on screen.
-    await showList();
-    if (post.unpublished) {
-      showBanner(`"${post.title}" saved as unpublished — it is hidden from the site.`, null);
-    } else {
-      showBanner(`"${post.title}" published — live on the site within about a minute.`, postUrl(post));
-    }
   } catch (err) {
     setStatus(`Save failed: ${err.message}`, 'err');
+    return;
+  }
+  // Land back on the post list with an unmissable confirmation instead of
+  // leaving the filled-in form on screen. The save has succeeded at this
+  // point, so a failed list reload must not mask the confirmation.
+  await showList().catch(() => {});
+  if (post.unpublished) {
+    showBanner(`"${post.title}" saved as unpublished — it is hidden from the site.`, null);
+  } else {
+    showBanner(`"${post.title}" published — live on the site within about a minute.`, postUrl(post));
   }
 }
 
