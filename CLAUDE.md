@@ -3,26 +3,23 @@ BAC Website — Project Working Conventions
 These are binding for every session in this repo.
 
 Project context
-•baclogistics.co.za is being rebuilt as a static site on Azure Static Web Apps (app_location "site", api_location "api").
-•Plan of record: Jira project BAC on rourke9001.atlassian.net (17 tickets, phases P0–P7). Read BAC-1's comments for the audit summary, and each ticket's comments for rescoping notes, before starting it.
-•README.md documents the repo layout and all confirmed scope decisions.
+•This repo is baclogistics.co.za: a static site on Azure Static Web Apps (app_location "site", api_location "api") with Azure Functions for the contact form and the dynamic blog (/blog/* served from Blob Storage, published via /admin/ with no deploy).
+•README.md documents the repo layout, scope decisions, and the operations runbook (DNS, contact form, secrets).
 •DESIGN.md documents the established design system (tokens, breakpoints, component patterns) — read it before any visual/UI change or new page/feature.
-•site/ is the mirror of the live site (137 pages, verified by direct filesystem count during BAC-12; blog pagination as /blog/pg/N/).
 
-Branching and Git
+Branching and deploys
 •develop is the working branch; base feature branches off develop and merge them into develop.
+•Pushes to develop deploy staging: https://ambitious-bush-084cda303-staging.7.azurestaticapps.net
 •Changes reach main only via PR (develop → main). Open PRs with gh, but the user merges them — never merge to main.
-•Pushes to main trigger the Azure Static Web Apps deploy (GitHub Actions); PRs to main get preview environments.
+•Pushes to main deploy production: https://baclogistics.co.za (the bare ambitious-bush-084cda303.7.azurestaticapps.net hostname also serves production). PRs to main get preview environments.
+•Staging and preview environments share production app settings (blob storage, email) — an /admin/ publish or form submission on staging touches production data.
 •Never commit anything under archive/ or any *.sql file (old-site credentials and PII; it is gitignored — keep it that way).
-
-Jira
-•Update the relevant Jira ticket (comment + transition) as work completes.
 
 Permissions
 •Ask the user before anything outward-facing other than pushing branches and opening PRs.
 
 Local preview
-•cd site; python -m http.server 8080
+•cd site; python -m http.server 8080 (static pages only; /blog/* needs the Functions host — see README)
 
 Workflow Orchestration
 
