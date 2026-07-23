@@ -149,7 +149,7 @@ test('stub email sender logs instead of sending; unknown providers rejected', as
   assert.throws(() => createEmailSender({ EMAIL_PROVIDER: 'pigeon' }, () => {}), /Unknown EMAIL_PROVIDER/);
 });
 
-// ---- Graph provider (BAC-9) ----
+// ---- Graph provider ----
 
 const GRAPH_ENV = {
   EMAIL_PROVIDER: 'graph',

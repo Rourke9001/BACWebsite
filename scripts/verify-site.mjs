@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * Verify a deployed copy of site/ (staging, a PR preview, or eventually prod):
+ * Verify a deployed copy of site/ (staging, a PR preview, or production):
  * every page loads, every same-site reference on every page resolves, the
  * configured redirects + 404 page behave, and the downloadable docs serve
- * with the right content-type. Zero dependencies, mirrors mirror.mjs's style.
+ * with the right content-type. Zero dependencies.
  *
  * The static page list comes straight from the site/ filesystem (not
- * sitemap.xml, which is incomplete); the dynamic blog pages (BAC-13, served
- * from Blob Storage via the Function) are enumerated from the live
- * /sitemap-blog.xml instead, since they no longer exist on disk. Redirects
+ * sitemap.xml, which is incomplete); the dynamic blog pages (served from
+ * Blob Storage via the Function) are enumerated from the live
+ * /sitemap-blog.xml instead, since they don't exist on disk. Redirects
  * and mimeTypes come from staticwebapp.config.json at runtime — nothing
  * about the site is hardcoded, so this keeps working as pages/redirects
- * change and is reusable as-is for a future production cutover check (BAC-16).
+ * change.
  *
  * Usage: node scripts/verify-site.mjs [base-url]
  * Exit code 0 = all clean, 1 = something failed (see report).
@@ -20,18 +20,16 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const DEFAULT_BASE = 'https://ambitious-bush-084cda303.7.azurestaticapps.net';
+const DEFAULT_BASE = 'https://baclogistics.co.za';
 const BASE = new URL(process.argv[2] || DEFAULT_BASE);
 const SITE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'site');
 const UA = 'BACWebsite-verify/1.0 (owner-authorised site migration)';
 const CONCURRENCY = 6;
 const MAX_REDIRECTS = 5;
 
-// Domains a mirrored page is expected to reference besides itself. The legacy
-// prod host is kept absolute in canonical/OG/JSON-LD tags by design (see
-// mirror.mjs's rewriteHtml); the rest are third-party CDNs/embeds/social
-// links. Anything NOT here is treated as a bug — this is exactly the check
-// that would have caught the gcz.co.za incident (BAC-12).
+// Domains a page is expected to reference besides itself. baclogistics.co.za
+// is kept absolute in canonical/OG/JSON-LD tags by design; the rest are
+// third-party CDNs/embeds/social links. Anything NOT here is treated as a bug.
 const ALLOWED_EXTERNAL_HOSTS = new Set([
   'baclogistics.co.za', 'www.baclogistics.co.za',
   'cdn.jsdelivr.net', 'code.jquery.com',
@@ -52,7 +50,7 @@ async function walkHtml(dir) {
   return out;
 }
 
-/** Inverse of mirror.mjs's outPath(): local site/ file -> URL path. */
+/** Local site/ file -> URL path. */
 function toUrlPath(file) {
   const rel = path.relative(SITE, file).split(path.sep).join('/');
   if (rel === 'index.html') return '/';
@@ -110,8 +108,8 @@ async function fetchFollow(url) {
   throw new Error(`>${MAX_REDIRECTS} redirects starting from ${url.href}`);
 }
 
-// BAC-13: blog pages are dynamic (blob-backed); enumerate them from the live
-// blog sitemap instead of the filesystem, plus derived pagination pages.
+// Blog pages are dynamic (blob-backed); enumerate them from the live blog
+// sitemap instead of the filesystem, plus derived pagination pages.
 async function blogUrls(base) {
   let res;
   try {
@@ -132,7 +130,7 @@ async function pool(items, worker, concurrency = CONCURRENCY) {
     while (queue.length) {
       const item = queue.shift();
       if (item !== undefined) await worker(item);
-      await new Promise(r => setTimeout(r, 40)); // pace requests, matches mirror.mjs's politeness delay
+      await new Promise(r => setTimeout(r, 40)); // politeness delay between requests
     }
   }));
 }

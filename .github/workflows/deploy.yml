@@ -1,0 +1,53 @@
+name: Deploy to Azure Static Web Apps
+
+# Deploy model:
+#   push to develop -> staging environment (…-staging.7.azurestaticapps.net)
+#   push to main    -> production (baclogistics.co.za)
+#   PRs to main     -> per-PR preview environments
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - main
+
+jobs:
+  build_and_deploy_job:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+          lfs: false
+      - name: Build And Deploy
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_AMBITIOUS_BUSH_084CDA303 }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
+          action: "upload"
+          app_location: "./site" # App source code path
+          api_location: "./api" # Api source code path - optional
+          output_location: "." # Built app content directory - optional
+          production_branch: "main"
+          # develop -> named "staging" environment; empty string keeps the default
+          # behavior for everything else (main -> production, PRs -> preview envs).
+          deployment_environment: ${{ github.event_name == 'push' && github.ref_name == 'develop' && 'staging' || '' }}
+
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        id: closepullrequest
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_AMBITIOUS_BUSH_084CDA303 }}
+          action: "close"

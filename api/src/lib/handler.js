@@ -14,7 +14,7 @@ const ERROR_REDIRECT = '/';
 const DEFAULT_RECIPIENT = 'info@baclogistics.co.za';
 // Must be a real tenant mailbox — the Graph app sends *as* it. donotreply@ is
 // shared with the office scanner identity; swap to a dedicated noreply@ shared
-// mailbox if one is created (trade-off recorded on BAC-3). Override: CONTACT_FROM.
+// mailbox if one is created. Override: CONTACT_FROM.
 const DEFAULT_FROM = 'donotreply@baclogistics.co.za';
 const FROM_NAME = 'BAC Logistics';
 
