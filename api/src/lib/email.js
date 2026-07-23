@@ -8,8 +8,8 @@
  * EMAIL_PROVIDER app setting selects the implementation:
  *   - "stub" (default): logs the message instead of sending — safe until Graph
  *     credentials are configured in SWA app settings.
- *   - "graph": Microsoft Graph app-only sendMail (BAC-3 decision; SMTP AUTH was
- *     ruled out — Microsoft retires basic-auth client submission Dec 2026).
+ *   - "graph": Microsoft Graph app-only sendMail (SMTP AUTH was ruled out —
+ *     Microsoft retires basic-auth client submission Dec 2026).
  *     Requires GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET, and `from`
  *     must be a real mailbox in the tenant (the app sends as that mailbox).
  */
@@ -82,7 +82,7 @@ function createGraphSender(env, logger, fetchImpl) {
             from: { emailAddress: { address: from, name: fromName } },
           },
           // saveToSentItems left at its default (true): the sending mailbox's
-          // Sent Items doubles as the audit trail for BAC-10's silent-failure concern.
+          // Sent Items doubles as the audit trail for silent send failures.
         }),
       });
       if (res.status !== 202) {

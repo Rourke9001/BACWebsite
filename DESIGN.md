@@ -5,7 +5,7 @@ The established visual design system for baclogistics.co.za, as it actually exis
 any visual/UI change, new page template, or new content-block type, so new work reuses what's
 already here instead of drifting from it.
 
-Blog page templates (BAC-13) live in `api/src/blog-templates/` — tokenized copies of the
+Blog page templates live in `api/src/blog-templates/` — tokenized copies of the
 static markup, rendered server-side by the Function. Edit them there, not in `site/`.
 
 ## Design tokens
@@ -76,8 +76,8 @@ Reuse these before writing new CSS — check `main.css` for the exact class firs
 
 - **Root-relative paths only** for internal links and assets (`/about/`, `/inc/css/main.css`,
   not absolute URLs). The only exception is canonical/alternate `<link>` tags, `og:`/`twitter:`
-  meta tags, and JSON-LD — those stay absolute to `baclogistics.co.za` by design (see
-  `scripts/mirror.mjs`'s `rewriteHtml`). Never hand-write a new absolute internal link.
+  meta tags, and JSON-LD — those stay absolute to `baclogistics.co.za` by design.
+  Never hand-write a new absolute internal link.
 - **Reuse before inventing** — a new page or section almost certainly matches one of the
   patterns above; check `main.css` before adding a new class.
 - **Content tone** — professional B2B logistics/freight-forwarding voice; match the existing
@@ -89,4 +89,4 @@ Reuse these before writing new CSS — check `main.css` for the exact class firs
 - `site/inc/js/main.js` — mobile nav toggle, FAQ accordion, Slick slider init (homepage only),
   scroll-triggered counters, active-nav-link marking, contact-form timestamp stamping.
 - The `gl-`/`glh-` class prefix is the original agency template's name ("Gridlink"), kept for
-  continuity per BAC-7's decision — not a rename target.
+  continuity — not a rename target.

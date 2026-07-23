@@ -1,4 +1,10 @@
 # scripts/
 
-Tooling for the migration: mirror/crawl of the live site (BAC-6), link checks,
-and the news rebuild-on-publish pipeline pieces (BAC-13).
+- **verify-site.mjs** — crawls a deployed copy of the site (staging, a PR preview,
+  or production) and checks that every page loads, every same-site reference
+  resolves, redirects and the 404 page behave, and the downloadable docs serve
+  with the right content-type. Zero dependencies.
+
+  ```
+  node scripts/verify-site.mjs [base-url]   # default: https://baclogistics.co.za
+  ```
