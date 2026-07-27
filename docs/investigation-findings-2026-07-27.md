@@ -9,7 +9,7 @@ every claim here can be re-run.
 | Workstream | Verdict |
 |---|---|
 | 1 — intermittent 502 | **Root cause not established**; the 502 did not reproduce in 1,661 requests. But the *10–20 s stalls* reported alongside it are a **separate, explained problem**: bandwidth contention on a 2.02 MB home page, 54 % of which is one PNG. |
-| 2 — duplication | **Leave it.** Duplication is real and large (~60 % of every page), but measured drift is **zero**. The case for a build step rested on drift risk that does not exist. Add a CI guard instead. |
+| 2 — duplication | **Leave it.** Duplication is real and large (~60 % of every page, 39 files behind 135 public URLs), but measured drift is **zero**. The case for a build step rested on drift risk that does not exist. Add a CI guard instead — and separately, fix `og:image`, which is empty on 128 of those 135 URLs. |
 | 3 — `/couch/uploads/…` | **Don't rename.** A precondition failed: SWA wildcard redirects do **not** preserve the captured path (proven on staging), so 157 indexed image URLs cannot be kept alive by a one-line rule. |
 
 ---
@@ -176,6 +176,45 @@ Measured empirically rather than by naming regions in advance: for a representat
 **403 of 675 non-blank lines (60 %) of a typical page is shared chrome.** 204 lines are
 identical across all 39 pages.
 
+### Per-block inventory
+
+| Block | Files | Instances per file | Total | Byte-exact variants | Drifted? |
+|---|---:|---:|---:|---|---|
+| Header top bar (contact strip) | 39 | 1 | 39 | 1 | no |
+| — CTA buttons (`#glht-cta-btns`) | 39 | 1 | 39 | 1 | no |
+| — Socials + mobile CTAs (`#glht-socials`) | 39 | 1 | 39 | 1 | no |
+| Header bottom (`#gl-header-bottom`) | 39 | 1 | 39 | 1 | no |
+| — Logo wrapper | 39 | 1 | 39 | 1 | no |
+| — Nav | 39 | 1 | 39 | 1 | no |
+| Footer | 39 | 1 | 39 | 1 | no |
+| GTM script | 41 | 1 | 41 | 3 (2 are stripped shells) | no |
+| GTM noscript | 39 | 1 | 39 | 1 | no |
+| Favicon / manifest block | 41 | 1 | 41 | 2 (1 is a stripped shell) | no |
+| Font preconnects | 41 | 2 | 82 | 2 (1 is a stripped shell) | no |
+| OG / Twitter meta scaffolding | 39 | 12 tags | 468 | 1 *structure* | no (see below) |
+
+The contact-detail counts inside those blocks reconcile exactly with the existing
+documentation: `wa.me/+27113531111` → 78 (2 × 39); `tel:0119747472` → 79 (2 × 39, plus the
+third instance in `site/contact/index.html`); `GTM-MPPHRHH` → one per file.
+
+### Blast radius
+
+Source files are a misleading measure, because two of the 39 are templates:
+
+| | Source files | Public URLs served |
+|---|---:|---:|
+| Static pages in `site/` | 37 | 37 |
+| `api/src/blog-templates/post.html` | 1 | 90 (published posts) |
+| `api/src/blog-templates/index.html` | 1 | 8 (`/blog/` + 7 pagination pages) |
+| **Total** | **39** | **135** |
+
+So editing any shared block means touching **39 files to change 135 URLs**. The asymmetry
+is the point: **the two blog templates are 5 % of the files but 73 % of the affected URLs.**
+A sweep that covers `site/` and forgets `api/src/blog-templates/` leaves 98 of 135 public
+pages — the majority of the site — showing the old value, while every page a developer is
+likely to spot-check looks correct. That is the single highest-risk mistake available here,
+and it is exactly what the CI guard below prevents.
+
 ### Drift: zero
 
 Each shared region was extracted per file and hashed byte-exactly:
@@ -194,6 +233,31 @@ the four page types that have no hero.
 Contact-detail counts reconcile exactly with the existing documentation:
 `wa.me/+27113531111` → 78 (2 × 39); `tel:0119747472` → 79 (2 × 39, plus the third instance
 in `site/contact/index.html`); `GTM-MPPHRHH` → one per file.
+
+### The OG scaffolding is consistent — and consistently empty
+
+The meta/OG block has **one structure across all 39 pages** (the same 12 tags in the same
+order), so there is no drift. But auditing the *values* rather than the markup turns up a
+real defect:
+
+| Tag | Populated | Empty |
+|---|---:|---:|
+| `og:title`, `og:url`, `twitter:card`, `twitter:title` | 39 | 0 |
+| `og:description`, `twitter:description` | 36 | 3 |
+| **`og:image`** | **1** | **38** |
+| `og:locale`, `og:type`, `og:site_name`, `twitter:site` | 0 | **39** |
+
+Combined with the blog finding — `og_image` is empty on all 90 stored posts — this means
+**essentially the whole site renders an empty `og:image`**: 38 of 39 static pages and 90 of
+90 blog posts. Every link shared to WhatsApp, LinkedIn or Facebook falls back to whatever
+the platform can scrape, which for these pages is usually nothing.
+
+For a business whose value is organic search and referral traffic, that is worth more than
+the duplication question this workstream was asked about. It is also cheap: the scaffolding
+is already present and uniform, so this is a value-population exercise, not a markup change.
+`featured_image` is the obvious source for posts and is already available in `render.js`.
+`og:locale` (`en_ZA`), `og:type` (`website`/`article`) and `og:site_name` (`BAC Logistics`)
+are constants.
 
 **One correction to the docs:** `docs/shared-header-duplication.md` records
 `Mobile: +27 83 375 5906` in `privacy-policy.html:804` as a known inconsistency. That was
@@ -216,7 +280,8 @@ CTAs and phone number behind JavaScript on a site whose value is organic search.
 
 | Change | Effort | Effect |
 |---|---|---|
-| `scripts/check-chrome.mjs` — assert every shared region is byte-identical across all 39 files; one CI step | ~2 h, ~80 lines | Converts "drift is possible" into "drift cannot merge", with no build step and no change to how the site is served. Fails the PR that forgets `api/src/blog-templates/`. |
+| `scripts/check-chrome.mjs` — assert every shared region is byte-identical across all 39 files; one CI step | ~2 h, ~80 lines | Converts "drift is possible" into "drift cannot merge", with no build step and no change to how the site is served. Fails the PR that forgets `api/src/blog-templates/` — the 5 %-of-files / 73 %-of-URLs trap. |
+| **Populate `og:image` and the four always-empty OG tags** | ~2 h | 128 of 135 public URLs currently render an empty `og:image`. Highest business value in this workstream, and it is filling in existing markup rather than changing it. |
 | Update `docs/shared-header-duplication.md` — drop the now-fixed privacy-policy inconsistency | ~10 min | Keeps the runbook trustworthy. |
 
 That guard buys the entire benefit the build step was proposed for, at a fraction of the risk.
@@ -321,9 +386,6 @@ first; then judge whether the remaining benefit still justifies the work.
 
 ### Side observations, not acted on
 
-- **`og_image` is empty on all 90 blog posts**, so every post renders
-  `<meta property="og:image" content="" />`. Social shares of blog posts have no preview
-  image. Cheap to fix — `featured_image` is already the obvious fallback in `render.js`.
 - The Functions host logs `azure.functions.webjobs.storage: Unhealthy — Unable to create
   client for AzureWebJobsStorage` every 30 s. `AzureWebJobsStorage` is not among the SWA
   app settings; managed Functions on Static Web Apps do not provide one. Functions execute
