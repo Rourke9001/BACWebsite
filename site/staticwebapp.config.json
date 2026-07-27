@@ -31,6 +31,11 @@
       "rewrite": "/api/documents"
     },
     {
+      "route": "/redirect-probe/*",
+      "redirect": "/redirect-target/*",
+      "statusCode": 302
+    },
+    {
       "route": "/about.html",
       "redirect": "/about/",
       "statusCode": 301
