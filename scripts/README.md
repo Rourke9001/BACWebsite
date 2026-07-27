@@ -40,3 +40,32 @@
   `--verify` exits non-zero on a size mismatch, a hash mismatch, a missing file, or a
   file on disk that the manifest doesn't list. Run it before trusting a backup you're
   about to restore from.
+
+- **reencode-images.py** — the one script here that isn't Node, because image encoding
+  needs a real codec. Requires Pillow (`python -m pip install Pillow`). It is a
+  maintenance tool, not part of the build or the deploy path.
+
+  ```
+  python scripts/reencode-images.py --check   # report, write nothing
+  python scripts/reencode-images.py           # do it
+  ```
+
+  Two jobs, kept apart because they carry different risk:
+
+  1. **Re-encode to WebP** (*changes the filename*). Static images over 500 KB become
+     `.webp` at quality 90, and their references are swept in the same pass.
+  2. **Strip embedded metadata** (*keeps the filename*). Every other image is rewritten
+     with its metadata removed — losslessly, by dropping container segments, never by
+     re-encoding. APP2/`iCCP` colour profiles and APP14 are deliberately **kept**:
+     dropping those changes how identical pixels are displayed, which a decoded-pixel
+     comparison would not catch.
+
+  **It does not re-encode blog images, on purpose.** `render.js` emits
+  `post.featured_image` verbatim (`render.js:55,109`), so a blog image's URL comes from
+  post JSON in Blob Storage, not from this repo — renaming one here would 404 every post
+  that references it. Those are re-encoded in Stage 6a instead, where they move to Blob
+  Storage under new names anyway. The two sets are separated by **reference source, not
+  directory**: blog and static images share folders, so the folder tells you nothing.
+
+  Per `tasks/lessons.md`, every encode, reference edit and assertion runs against
+  in-memory buffers first; a failing run writes nothing at all.
