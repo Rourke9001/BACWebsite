@@ -173,6 +173,49 @@ it needs your approval and is not applied:**
 az storage account update -n bacblogcontent -g rg-baclogistics-web --sku Standard_GRS
 ```
 
+### Static asset caching — and how to force a re-download
+
+`site/staticwebapp.config.json` sets long cache lifetimes on assets. Verified on staging
+that route `headers` do override the SWA platform default (`public, must-revalidate,
+max-age=30`), which applies to everything without a matching route:
+
+| Route | `Cache-Control` |
+|---|---|
+| `/couch/*` (`/media/*` after Stage 6b) | `public, max-age=31536000, immutable` |
+| `/inc/font-awesome/*` | `public, max-age=31536000, immutable` |
+| `/inc/css/main.css`, `/inc/js/main.js` | `public, max-age=300` |
+| everything else, incl. HTML | platform default, `max-age=30` |
+
+HTML deliberately stays on the short default so content changes appear immediately.
+
+**A cache header never deletes anything.** A one-year `max-age` means a browser may reuse
+its downloaded copy for a year without re-checking; the file stays on the server
+indefinitely. The only consequence is staleness: replace an image with a *different*
+picture under the *same* filename and returning visitors may keep seeing the old one.
+
+**Nothing can reach a browser that has already cached a response.** There is no purge, no
+invalidation signal, and clearing the Azure edge cache does not touch a visitor's browser.
+The only mechanism that works is **changing the URL**, because a different URL is a
+different cache entry.
+
+So if you ever need to replace a static image in place, change the *reference*, not the
+file — a query string is enough, and the route still matches so the header still applies
+(verified on staging):
+
+```html
+<!-- was -->
+<img src="/couch/uploads/image/home/bac-header1.webp">
+<!-- force everyone to re-download, same file on disk -->
+<img src="/couch/uploads/image/home/bac-header1.webp?v=2">
+```
+
+Bump `v` again for the next change. For the logo, which lives in the shared chrome, edit
+`data/site.json` and run `npm run build:chrome`.
+
+This does not arise for blog images: `/admin/` stamps every upload with a timestamp
+(`admin-blog.js:63` → `<base>-<Date.now()>.<ext>`), so a re-upload always produces a new
+filename and a browser can never hold a stale copy of it.
+
 ### Contact form
 
 `POST /api/contact-form` sends mail via Microsoft Graph using an Entra app registration
