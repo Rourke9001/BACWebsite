@@ -103,23 +103,38 @@ templates render with zero unresolved `${}` or `{{}}` tokens.
 
 ### Remaining
 
-- [ ] Stage 3 — cache headers (PR 3). **Gate:** verify on staging that route `headers`
-      override the platform default (push, `curl -I`, confirm) before trusting the rest of
-      the stage. If they don't, stop and report. Write `/couch/*` now; Stage 6b renames it.
-- [ ] Stage 4 — re-encode the 95 images over 500 KB (PR 4). **Question resolved:** WebP,
-      sweeping references. Measured below; the "keep filenames stable" constraint was
-      written before anyone counted the references, and it costs 42 lines.
-      - 72 of the 95 (74.3 MB, 77 %) are **blog** images with **zero** repo references —
-        Stage 6a already rewrites their paths in `render.js` at render time, so the
-        extension change rides along on an edit that was happening anyway.
-      - 23 are **static**, referenced 42 times across 36 files. Provable per `lessons.md`.
-      - Measured savings: WebP q82 −89…−96 %, JPEG q85 −82…−91 %, palette-PNG (extension
-        stable) only −26…−75 % and *worst* on the home hero. Site drops ~97 MB → ~10 MB.
-      - 18 of the 20 oversized static PNGs are 1920×700 heroes that declare RGBA but never
-        use it, at 2–5 k colours: photographs in the wrong container. Only **2** of all 95
-        genuinely use transparency (both blog images; WebP preserves it).
-      - **Gate before replacing any file:** build a side-by-side original-vs-re-encoded
-        comparison for the owner to approve. Quality is the whole risk in this stage.
+- [x] Stage 3 — cache headers — ✅ MERGED (PR #18). **The gate passed on staging:** route
+      `headers` do override the platform default. `/couch/*` and `/inc/font-awesome/*`
+      (including the webfonts) now return `max-age=31536000, immutable`; `main.css` and
+      `main.js` return `max-age=300` with `must-revalidate` dropped. HTML pages correctly
+      still return `max-age=30` — the control proving the routes match selectively.
+      **Open judgement call for the owner:** `immutable` for a year on `/couch/*` is a
+      sharp edge, because those filenames are not content-fingerprinted. Stage 4 renamed
+      most of them (`.png` → `.webp`), which is itself a cache bust, so the exposure is now
+      smaller than it was at merge — but a future in-place image replacement under the same
+      name would still be cached for up to a year. Options: adopt "changed image = new
+      filename", or drop to `max-age=2592000` (30 days).
+- [x] Stage 4 — re-encode oversized images (PR #19). **Owner approved WebP q90** after
+      reviewing 1:1 crops. **Scope narrowed on evidence:** only the **23 static** oversized
+      images are re-encoded here. The 72 oversized *blog* images are deferred to Stage 6a
+      because `render.js:55,109` emits `post.featured_image` verbatim — their URLs come
+      from blob JSON, not the repo, so renaming them here would 404 all 90 posts. In 6a
+      they move to Blob Storage under new names anyway, so they get encoded once.
+      - 23 files, 23,757,322 → 3,308,634 bytes (−86%). `site/` 109.5 MB → 90 MB.
+      - 42 reference occurrences across 36 files swept; diff arithmetic exact
+        (42 ins / 42 del, 0 changed lines lacking the token), LF preserved.
+      - **Metadata strip added** (filename-preserving, so safe for blog images too):
+        93 files, 1,404,771 bytes of embedded metadata removed. `IdeationDT1` 11 → 0,
+        `C:\Users\…` 12 → 0, `AdobeID` 12 → 0, `xmpmeta` 90 → 0. 43 JPEGs **kept** their
+        ICC colour profile — the strip is surgical, asserted per file, not blanket.
+      - Verified: chrome 39/39, api 55/55, every image 200s locally, home + about render
+        correctly in a browser, no console errors.
+
+      **Carried into Stage 6a:** the 72 oversized blog images, 74.3 MB, still unencoded in
+      the repo. Encode them to WebP q90 as part of the blob upload so each is written once.
+      Measured evidence behind the q90 choice: q75 −93.5 %, q82 −91.4 %, q90 −86.9 % across
+      all 95; palette-PNG (extension stable) only −26…−75 % and *worst* on the home hero.
+      Only **2** of the 95 genuinely use transparency, both blog images — WebP preserves it.
 - [ ] Stage 5 — OG/Twitter metadata, 135 URLs (PR 5). Static side is a `partials/` +
       `data/site.json` edit; `render.js:98` needs the `featured_image` → `og_image`
       fallback, which fixes all 90 posts without touching a blob. Fix the doubled JSON-LD
