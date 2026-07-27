@@ -78,6 +78,14 @@ Reuse these before writing new CSS — check `main.css` for the exact class firs
   not absolute URLs). The only exception is canonical/alternate `<link>` tags, `og:`/`twitter:`
   meta tags, and JSON-LD — those stay absolute to `baclogistics.co.za` by design.
   Never hand-write a new absolute internal link.
+- **Share image (`og:image`/`twitter:image`) — a page shares its own hero.** Same file as
+  `#gl-hero-image` (or the slider image on the home page), absolute. A page with no imagery
+  of its own falls back to the home hero, `/couch/uploads/image/home/bac-header1.webp`; blog
+  posts fall back to `featured_image` (`render.js`). `og:image` and `twitter:image` always
+  hold the same value. The site-wide constants — `og:locale`, `og:site_name`,
+  `twitter:card` — are chrome (`partials/social-meta.html`), not per-page. A new page needs
+  `og:type`, `og:image` and `twitter:image` filled; `scripts/verify-site.mjs` fails the
+  crawl if any of them is left empty.
 - **Reuse before inventing** — a new page or section almost certainly matches one of the
   patterns above; check `main.css` before adding a new class.
 - **Content tone** — professional B2B logistics/freight-forwarding voice; match the existing

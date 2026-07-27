@@ -38,6 +38,57 @@ test('renderPost adds video, json_ld and robots only when present', () => {
   assert.ok(sneaky.includes('<\\/script>'));
 });
 
+test('og:image falls back featured_image -> site default, and is always absolute', () => {
+  // No post in production carries an og_image; every one carries a featured_image.
+  const inherited = render.renderPost(post());
+  assert.ok(inherited.includes(
+    'property="og:image" content="https://baclogistics.co.za/couch/uploads/image/blog/x.png"'));
+  assert.ok(inherited.includes(
+    'name="twitter:image" content="https://baclogistics.co.za/couch/uploads/image/blog/x.png"'));
+
+  // An explicit og_image still wins over featured_image.
+  const explicit = render.renderPost(post({ og_image: '/couch/uploads/image/blog/share.png' }));
+  assert.ok(explicit.includes(
+    'property="og:image" content="https://baclogistics.co.za/couch/uploads/image/blog/share.png"'));
+
+  // /admin/ accepts free text, so an author-supplied absolute URL must survive untouched.
+  const external = render.renderPost(post({ og_image: 'https://cdn.example.com/a.png' }));
+  assert.ok(external.includes('property="og:image" content="https://cdn.example.com/a.png"'));
+
+  // Neither field set — a future post saved without an image still shares something.
+  const bare = render.renderPost(post({ og_image: '', featured_image: '' }));
+  assert.ok(bare.includes(
+    'property="og:image" content="https://baclogistics.co.za/couch/uploads/image/home/bac-header1.webp"'));
+
+  // Never a relative or empty value, whatever the input.
+  for (const html of [inherited, explicit, external, bare]) {
+    assert.ok(!/content="" \/>\s*\n\s*<meta name="twitter:card"/.test(html));
+    assert.ok(!html.includes('property="og:image" content="/'));
+  }
+});
+
+test('post head carries populated social metadata', () => {
+  const html = render.renderPost(post());
+  assert.ok(html.includes('property="og:type" content="article"'));
+  assert.ok(html.includes('property="og:locale" content="en_ZA"'));
+  assert.ok(html.includes('property="og:site_name" content="BAC Logistics"'));
+  assert.ok(html.includes('name="twitter:card" content="summary_large_image"'));
+  // og:description mirrors the meta description rather than rendering empty.
+  assert.ok(html.includes('property="og:description" content="Desc"'));
+  assert.ok(html.includes('name="twitter:description" content="Desc"'));
+  assert.ok(!html.includes('twitter:site'));   // no X account to attribute to
+});
+
+test('blog index head carries populated social metadata', () => {
+  const html = render.renderIndex([post()], 1);
+  assert.ok(html.includes('property="og:type" content="website"'));
+  assert.ok(html.includes('property="og:locale" content="en_ZA"'));
+  assert.ok(html.includes(
+    'property="og:image" content="https://baclogistics.co.za/couch/uploads/image/blog/news.webp"'));
+  assert.ok(html.includes(
+    'name="twitter:image" content="https://baclogistics.co.za/couch/uploads/image/blog/news.webp"'));
+});
+
 test('folder posts get folder URLs', () => {
   assert.strictEqual(render.postUrlPath(post({ folder: 'road-freight' })),
     '/blog/road-freight/test-post.html');

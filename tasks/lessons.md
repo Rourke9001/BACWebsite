@@ -171,6 +171,33 @@ references are sweepable and provable in the same commit. References in a databa
 store, or anything else outside the diff are a different and much larger change, and they
 usually belong in whichever stage is already rewriting that data.
 
+## A uniform-looking block is not necessarily chrome — check the markers
+
+The Stage 5 handoff said the OG/Twitter tags were "a `partials/` + `data/site.json` edit,
+chrome is single-sourced". The block *is* byte-uniform in shape across all 39 files, which
+is what made that plausible. It is not chrome: it sits between `@end:head-css` and
+`@chrome:head-meta`, and five of its tags (`og:title`, `og:description`, `og:url`,
+`twitter:title`, `twitter:description`) hold per-page values. Planning it as a partial edit
+would have produced 39 identical share cards.
+
+"Uniform across files" and "single-sourced" are different claims. Before planning around
+either, run `sed -n '/@chrome:/,/@end:/p'` — or just look at the markers — and split the
+region into what genuinely never varies and what only *looks* like it doesn't.
+
+## Assert before writing, and the assertion finds other people's bugs too
+
+`tasks/lessons.md` already says validate-everything-then-write. Worth recording what that
+bought the second time: the Stage 5 migration asserted "no `content=""` survives in the OG
+block" and refused to write **any** of the 39 files. The cause was not the migration — it
+was two `/video-hub/` pages shipping an empty `<meta name="description">`, and pulling that
+thread found 12 more carrying the literal placeholder `Meta description for video` in three
+tags each. A pre-existing content defect, live in production, that nothing in the brief or
+four investigation documents had noticed.
+
+A write-then-report tool would have written 39 files and printed a warning nobody read.
+Assertions that stop the run are how unrelated defects surface — so make them about the
+*desired end state*, not just about your own transformation.
+
 ## CSS: an author `display` rule silently defeats the `hidden` attribute
 
 `[hidden] { display: none }` lives in the **UA stylesheet**, so *any* author-stylesheet

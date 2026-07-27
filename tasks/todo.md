@@ -135,16 +135,91 @@ templates render with zero unresolved `${}` or `{{}}` tokens.
       Measured evidence behind the q90 choice: q75 −93.5 %, q82 −91.4 %, q90 −86.9 % across
       all 95; palette-PNG (extension stable) only −26…−75 % and *worst* on the home hero.
       Only **2** of the 95 genuinely use transparency, both blog images — WebP preserves it.
-- [ ] Stage 5 — OG/Twitter metadata, 135 URLs (PR 5). Static side is a `partials/` +
-      `data/site.json` edit; `render.js:98` needs the `featured_image` → `og_image`
-      fallback, which fixes all 90 posts without touching a blob. Fix the doubled JSON-LD
-      here too.
+- [ ] Stage 5 — OG/Twitter metadata, 135 URLs (PR 5) — **in progress**, branch
+      `feature/og-metadata`. Detailed plan below.
 - [ ] **HARD STOP — set up Google Search Console with the owner before Stage 6.**
       Owner has domains.co.za access for the TXT verification record. Never touch MX, SPF,
       DKIM or autodiscover.
 - [ ] Stage 6a — 87 blog images to Blob Storage (PR 6)
 - [ ] Stage 6b — 69 static images to `site/media/`, redirect decision (PR 7)
 - [ ] Stage 7 — housekeeping (PR 8)
+
+### Stage 5 plan — OG/Twitter metadata (branch `feature/og-metadata`)
+
+**Correction to the handoff note:** the OG/Twitter block is *not* inside a chrome region.
+It sits between `@end:head-css` and `@chrome:head-meta`, uniform in shape across all 39
+files (3 whitespace variants, identical tag lines) but carrying per-page values. So this is
+**not** purely a `partials/` edit — the per-page values must be written into each file.
+
+What is already correct, and stays untouched: `og:title`, `og:description`, `og:url`,
+`twitter:title`, `twitter:description` on all 37 static pages and the blog index.
+
+Owner decisions taken 2026-07-27: constants → a new chrome region; `og:image` → each
+page's own hero; `twitter:site` → removed (no X account exists — header-top carries exactly
+four social icons, `partials/header-top.html:54-79`, and none is X).
+
+- [x] **Constants → `partials/social-meta.html`** + `og_locale` / `og_site_name` in
+      `data/site.json`. New `<!-- @chrome:social-meta -->` region placed *after*
+      `twitter:image` (meta order is semantically irrelevant), holding `og:locale`,
+      `og:site_name`, `twitter:card`. Guarded by `npm run check:chrome` like the rest —
+      `--list` now reports 11 regions × 39 files.
+- [x] **`og:type`** stays per-page — a per-document semantic, not a site constant.
+      `website` on the 37 static pages + blog index, `article` on `post.html`.
+- [x] **`twitter:site` removed** from all 39 files.
+- [x] **`og:image` + `twitter:image`**, absolute (per `DESIGN.md`: OG tags stay absolute):
+      33 pages use their own `#gl-hero-image` src; `site/index.html` uses its slider image
+      `bac-header1.webp`; the 3 `/information/` pages have no imagery and fall back to that
+      same home hero as the site-wide default; the blog index uses `blog/news.webp`.
+      All 1920×700. **18 distinct images across 38 literal URLs, all verified present on
+      disk and 200 locally; `og:image == twitter:image` on every file.**
+- [x] **`render.js:98`** — `esc(post.og_image)` → `esc(shareImage(post))`, the chain
+      `og_image → featured_image → site default`, plus `absoluteUrl()` (OG requires an
+      absolute URL; `featured_image` is stored root-relative, and `/admin/` accepts a
+      free-text `og_image` so an author-supplied absolute URL must survive untouched).
+      Fixes all 90 posts with no blob writes.
+- [x] **`post.html`** — `og:description` / `twitter:description` were `content=""` while
+      `{{meta_description}}` was already computed for `<meta name="description">`. Wired up.
+- [x] **JSON-LD fix**, `video-hub/cross-border-freight-delays-often-start-before-the-border.html`.
+      The doubled `<script>` made the block's *content* start with a literal
+      `<script type="application/ld+json">`, so **the JSON never parsed and Google was
+      discarding the page's structured data entirely** — the page had no working schema at
+      all, not merely a duplicated one. Also: placeholder `path-to-bac-logo.png` → the real
+      logo, and `@id`/`mainEntityOfPage` pointed at
+      `https://www.baclogistics.co.za/video-hub/…-border/`, a trailing-slash URL that
+      **404s** — both repointed at the page's canonical. Now parses; asserted with `json.loads`.
+- [x] **`scripts/verify-site.mjs`** — `missingSocialMeta()` asserts nine og:/twitter: tags
+      carry a value on every page crawled, wired into the report line and the pass/fail
+      gate. `extractRefs` already fetched absolute `<meta content>` URLs, so a
+      populated-but-404 `og:image` fails too. Exported behind an
+      `import.meta.url === argv[1]` guard so it is testable without a deploy.
+- [x] **Verify**: `check:chrome` 39/39 · api **58/58** (was 55, +3) · diff arithmetic
+      uniform **9+/7−** on all 39 files with **0** changed lines lacking an expected token ·
+      LF preserved (only `tasks/todo.md` carries CR, unpinned and pre-existing) · region
+      inside `<head>` and correctly paired on 39/39 · local preview 200s · the new check
+      run against `origin/develop` **fails 37/37** and against the working tree
+      **passes 37/37**, plus rendered post and index.
+
+### Stage 5 — found, NOT fixed, needs an owner decision
+
+- [ ] **14 of 17 `/video-hub/` pages have a defective `<meta name="description">`**, which
+      `og:description` and `twitter:description` mirror. **12 carry the literal placeholder
+      `Meta description for video`** (3 tags each = 36 live instances); 2 are empty
+      (`chain-of-custody-…`, `why-one-late-delivery-…`). Live in production and shown in
+      Google results. Surfaced by the migration's own assertion, not by any of the four
+      investigation documents. Left alone deliberately: this is 14 pages of marketing copy
+      in the owner's voice, not metadata plumbing. The body copy on each page is more than
+      enough to draft from — say the word.
+- [ ] **All 17 video-hub pages share one `og:image`** (`video_hub.webp`, the section hero).
+      Each page has a YouTube id, so `https://img.youtube.com/vi/<id>/maxresdefault.jpg`
+      would give 16 distinct, highly relevant share images at zero storage cost
+      (`img.youtube.com` is already in `verify-site.mjs`'s allowlist). Trade-off: share
+      cards would then depend on YouTube's CDN. Section hero kept as the safer default.
+- [ ] **Share images are 1920×700 (2.74:1); Facebook/LinkedIn render 1.91:1.** Cards get
+      centre-cropped — fine for banner photography, but purpose-built 1200×630 art would
+      survive the crop intact. A separate piece of image work, not metadata.
+- [ ] **Only one page in `site/` carries JSON-LD at all.** The other 16 video pages have no
+      `VideoObject` schema, and no page carries `Organization` or `LocalBusiness`. Out of
+      scope here; worth its own stage if search visibility matters.
 
 ### Derived independently this session (reproduces the brief exactly)
 
