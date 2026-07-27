@@ -108,12 +108,14 @@ templates render with zero unresolved `${}` or `{{}}` tokens.
       (including the webfonts) now return `max-age=31536000, immutable`; `main.css` and
       `main.js` return `max-age=300` with `must-revalidate` dropped. HTML pages correctly
       still return `max-age=30` — the control proving the routes match selectively.
-      **Open judgement call for the owner:** `immutable` for a year on `/couch/*` is a
-      sharp edge, because those filenames are not content-fingerprinted. Stage 4 renamed
-      most of them (`.png` → `.webp`), which is itself a cache bust, so the exposure is now
-      smaller than it was at merge — but a future in-place image replacement under the same
-      name would still be cached for up to a year. Options: adopt "changed image = new
-      filename", or drop to `max-age=2592000` (30 days).
+      **DECIDED — stays at one year.** The concern was that `/couch/*` filenames are not
+      content-fingerprinted, so an in-place image replacement would go stale for up to a
+      year. Resolved by a documented escape hatch rather than a shorter lifetime: append a
+      query string to the *reference* (`…bac-header1.webp?v=2`). Verified on staging that a
+      query string still serves the file, still matches the route and still carries the
+      header, while being a distinct browser cache entry. Written up in
+      `README.md` → Operations → Static asset caching. Does not arise for blog images —
+      `admin-blog.js:63` timestamps every upload, so re-uploads always get a new filename.
 - [x] Stage 4 — re-encode oversized images (PR #19). **Owner approved WebP q90** after
       reviewing 1:1 crops. **Scope narrowed on evidence:** only the **23 static** oversized
       images are re-encoded here. The 72 oversized *blog* images are deferred to Stage 6a
