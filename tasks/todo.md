@@ -203,14 +203,20 @@ four social icons, `partials/header-top.html:54-79`, and none is X).
 
 ### Stage 5 — found, NOT fixed, needs an owner decision
 
-- [ ] **14 of 17 `/video-hub/` pages have a defective `<meta name="description">`**, which
-      `og:description` and `twitter:description` mirror. **12 carry the literal placeholder
-      `Meta description for video`** (3 tags each = 36 live instances); 2 are empty
+- [x] **14 of 17 `/video-hub/` pages had a defective `<meta name="description">`**, which
+      `og:description` and `twitter:description` mirror. **12 carried the literal placeholder
+      `Meta description for video`** (3 tags each = 36 live instances); 2 were empty
       (`chain-of-custody-…`, `why-one-late-delivery-…`). Live in production and shown in
       Google results. Surfaced by the migration's own assertion, not by any of the four
-      investigation documents. Left alone deliberately: this is 14 pages of marketing copy
-      in the owner's voice, not metadata plumbing. The body copy on each page is more than
-      enough to draft from — say the word.
+      investigation documents. **Owner chose "draft them, I'll edit" (2026-07-27)** —
+      drafted from each page's own body copy, matching the tone of the one page that was
+      done properly. 14 pages × 3 tags = 42 values, 139–149 chars, ASCII only (no em
+      dashes or curly quotes, so nothing depends on encoding). Diff uniform 3+/3− per file,
+      0 changed lines that are not a description tag. Repo-wide placeholder count now 0;
+      all three tags agree on all 17 pages. **Copy is owner-editable — review in the PR.**
+      Not touched: `full-container-load-fcl-vs-less-than-container-load-lcl.html`, whose
+      description is populated but is just its title repeated. Suggested replacement in
+      the PR body if wanted.
 - [ ] **All 17 video-hub pages share one `og:image`** (`video_hub.webp`, the section hero).
       Each page has a YouTube id, so `https://img.youtube.com/vi/<id>/maxresdefault.jpg`
       would give 16 distinct, highly relevant share images at zero storage cost
