@@ -192,6 +192,9 @@ Raise this trade-off with the owner rather than deciding it unilaterally.
 - Ask before anything outward-facing other than pushing branches and opening PRs.
 - Never touch MX, SPF, DKIM or autodiscover DNS at domains.co.za.
 - Never commit anything under `archive/` or any `*.sql` file.
-- There is an **open action** from the investigation: the temporary diagnostic setting
-  `swa-http-logs-temp` on the SWA. Leave it until a 502 has been caught, then
-  `az monitor diagnostic-settings delete --name swa-http-logs-temp --resource <swa-id>`.
+- No open Azure actions. The temporary `swa-http-logs-temp` diagnostic setting from the
+  investigation was deleted on 2026-07-27 after it was established that SWA never emitted
+  the category; the app has no diagnostic settings. Note the consequence: **static-asset
+  502s currently leave no server-side trace**, so if one is reported during this work,
+  capture the client-side evidence (URL, timestamp, response headers) at the time — it
+  cannot be recovered afterwards.

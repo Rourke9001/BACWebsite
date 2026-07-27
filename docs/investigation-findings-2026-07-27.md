@@ -142,13 +142,18 @@ StaticSiteHttpLogs
 | project TimeGenerated, CsUriStem, ScStatus, TimeTaken, CIp, UserAgent
 ```
 
-You asked for this **temporarily**. Remove it once a 502 has been caught and understood:
+**The setting was deleted on 2026-07-27** once it was established that nothing was being
+emitted. The Static Web App now has **no diagnostic settings**, exactly as it did before
+this investigation:
 
 ```powershell
 az monitor diagnostic-settings delete --name swa-http-logs-temp --resource <swa-resource-id>
+az monitor diagnostic-settings list --resource <swa-resource-id>   # -> []
 ```
 
-Cost while it runs: Log Analytics ingestion at ~$2.76/GB — cents per month at this traffic.
+It never ingested a byte, so it cost nothing. **There is no open action here.** If HTTP
+logging is wanted in future, resolve the emission problem first (see the update above) —
+re-creating the setting alone will not produce data.
 
 ### Recommendation — costed
 
