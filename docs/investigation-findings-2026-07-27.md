@@ -8,7 +8,7 @@ every claim here can be re-run.
 
 | Workstream | Verdict |
 |---|---|
-| 1 — intermittent 502 | **Root cause not established**; the 502 did not reproduce in 1,374 requests. But the *10–20 s stalls* reported alongside it are a **separate, explained problem**: bandwidth contention on a 2.02 MB home page, 54 % of which is one PNG. |
+| 1 — intermittent 502 | **Root cause not established**; the 502 did not reproduce in 1,661 requests. But the *10–20 s stalls* reported alongside it are a **separate, explained problem**: bandwidth contention on a 2.02 MB home page, 54 % of which is one PNG. |
 | 2 — duplication | **Leave it.** Duplication is real and large (~60 % of every page), but measured drift is **zero**. The case for a build step rested on drift risk that does not exist. Add a CI guard instead. |
 | 3 — `/couch/uploads/…` | **Don't rename.** A precondition failed: SWA wildcard redirects do **not** preserve the captured path (proven on staging), so 157 indexed image URLs cannot be kept alive by a one-line rule. |
 
