@@ -46,7 +46,7 @@ things were settled, though. The Functions host is provably not in the static pa
 static requests produced zero App Insights entries while `/blog/*` logs reliably, and
 Function telemetry has never recorded a 502. And the 10–20 s stalls reported alongside the
 502 turn out to be a *different* problem with a clear cause: sequential probing never
-exceeded 2.75 s, but loading the whole page concurrently — what a browser does — hit
+exceeded 2.96 s, but loading the whole page concurrently — what a browser does — hit
 8.98 s, with TTFB at 0.77 s. The server answers promptly; the time goes into transfer of a
 2.02 MB page, 54 % of which is a single 1.1 MB PNG. Recommended, in order: re-encode that
 image, set real cache headers (every asset currently gets `max-age=30, must-revalidate`
