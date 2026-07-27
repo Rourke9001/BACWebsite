@@ -31,10 +31,11 @@ static pages lack.
 
 ## Why it is like this
 
-The old site was CouchCMS: one PHP template with the header in a single include, stamped out
-server-side on every request. The migration to Azure Static Web Apps was a deliberate
-**static rebuild, not a lift-and-shift** (see README, *Scope decisions*), and the export
-flattened that template — each page got its own baked copy of the header markup.
+`site/` is a **static export**. The pages were produced by flattening a server-rendered
+template, so the header that was once a single include became a baked-in copy on every
+page. That was a deliberate scope decision — a static rebuild, not a lift-and-shift (see
+README, *Scope decisions*) — and it is why the duplication exists rather than being an
+accident someone introduced later.
 
 Nothing since has re-introduced a shared header, because two things would have to give:
 

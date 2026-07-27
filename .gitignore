@@ -1,4 +1,4 @@
-# Old-site backup — contains DB dumps, plaintext credentials (couch/config.php),
+# Previous site's backup — contains DB dumps, plaintext credentials (config.php),
 # and PII (form submission logs/uploads). NEVER commit anything under archive/.
 archive/
 
