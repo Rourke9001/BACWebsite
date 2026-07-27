@@ -1,5 +1,13 @@
 # Brief — shared-component guard + removing the `/couch/uploads/` path
 
+> **SUPERSEDED IN PART (2026-07-27).** Part 1 below recommends *keeping* the duplication and
+> adding a CI guard to detect drift. The owner has since stated a firm requirement —
+> "if I need to update a phone number I want to do it in one place" — which that approach
+> does not satisfy. **Part 1 is replaced by
+> `docs/brief-site-architecture-single-source.md`.** Part 2 (removing `/couch/uploads/`)
+> is unaffected and still stands, but note the sequencing: extracting the chrome first
+> turns the logo path rename into a one-file edit instead of a 39-file sweep.
+
 Hand this to a fresh session. Everything below the line is the brief.
 Findings it builds on are in **`docs/investigation-findings-2026-07-27.md`** (read it first) —
 this brief assumes that investigation and does not repeat its evidence.

@@ -114,8 +114,27 @@ az monitor diagnostic-settings create --name swa-http-logs-temp `
   --logs '[{"category":"StaticSiteHttpLogs","enabled":true}]'
 ```
 
-First data had not yet landed when this was written (new tables typically take 30–60 min).
-When a 502 next occurs:
+> **UPDATE 2026-07-27 10:42 UTC — this did not work.** Three hours after the setting was
+> created, and two hours after four deliberately marked requests (`User-Agent:
+> BAC-LogProbe-20260727`, including a forced 404), the `StaticSiteHttpLogs` table **still
+> does not exist** in the workspace, and nothing landed in the `AzureDiagnostics` fallback
+> either. The workspace contains only the App Insights tables that flow from the Functions
+> instrumentation. The diagnostic setting itself is verified correct (category enabled,
+> correct workspace).
+>
+> **Azure SWA is not emitting this category for this app.** The most plausible reason is
+> that HTTP logging depends on the enterprise-grade edge, and
+> `enterpriseGradeCdnStatus` is **`Disabled`** on this Static Web App — that Front Door
+> layer is what would log HTTP requests. This is a hypothesis, not verified.
+>
+> **Consequence: recommendation 3 below is not currently available**, and a recurrence of
+> the 502 remains unattributable. Options are (a) enable enterprise-grade CDN and retest —
+> this adds cost and should be priced first, (b) raise it with Azure support, or (c) accept
+> that static-asset 502s cannot be traced on this configuration and delete the setting.
+> Until one of those is chosen, the setting is harmless but useless: no data means no
+> ingestion cost.
+
+When a 502 next occurs, *if* logging is ever made to work:
 
 ```kusto
 StaticSiteHttpLogs
@@ -137,7 +156,7 @@ Cost while it runs: Log Analytics ingestion at ~$2.76/GB — cents per month at 
 |---|---|---|---|
 | 1 | **Re-encode `bac-header1.png`** as JPEG/WebP at equivalent visual quality | ~1 h | Removes ~1 MB (≈50 %) from every cold home-page load. Directly attacks the mechanism that produced the 9 s stall. Highest user-visible value. |
 | 2 | **Cache headers** in `staticwebapp.config.json`: `/couch/*` and `/inc/font-awesome/*` → `max-age=31536000, immutable`; `main.css` / `main.js` → `max-age=300` (drop `must-revalidate`) | ~30 min + staging soak | 20 of 23 requests stop revalidating every 30 s. Cuts origin contact ~20×, and with it the exposure to whatever produces the 502. |
-| 3 | **Keep `StaticSiteHttpLogs` on** until a 502 is caught | done | Turns the next occurrence into one query instead of another blind investigation. |
+| 3 | ~~**Keep `StaticSiteHttpLogs` on** until a 502 is caught~~ — **does not work, see the update above** | — | Would have turned the next occurrence into one query. SWA is not emitting the category; decide between enabling enterprise-grade CDN, an Azure support question, or accepting the gap. |
 
 On (2), no cache-busting scheme is needed: at `max-age=300` the worst case for a CSS change
 is five minutes' staleness, which avoids the 39-file versioning sweep the brief was rightly
