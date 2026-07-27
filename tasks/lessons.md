@@ -24,6 +24,49 @@ MSG
 Then check with `git log -1 --format='%s'` before pushing. A malformed subject is
 cheap to fix while unpushed and permanent afterwards.
 
+## Detecting line endings: `grep -c $'\r$'` lies — use `xxd`
+
+This repo's files are **LF**, including `site/`. A check of the form
+
+```bash
+crlf=$(grep -c $'\r$' "$f"); total=$(wc -l < "$f")   # WRONG
+```
+
+reported `crlf == total` for every file — i.e. "100% CRLF" — on files with no CR in them
+at all. The `$'\r'` gets eaten before grep sees it and the pattern collapses to `$`, which
+matches every line. The failure mode is the worst kind: it returns a confident, plausible,
+uniform answer.
+
+Settle it on raw bytes instead, and never on a line-ending question you are about to build
+on:
+
+```bash
+head -c 40 file.html | xxd     # look for 0d0a (CRLF) vs bare 0a (LF)
+```
+
+Related: `.gitattributes` pinned only `site/** -text`. With `core.autocrlf=true`, everything
+*outside* that pin — `api/src/blog-templates/`, and any new build inputs — gets CRLF working
+copies of LF blobs on a Windows checkout, so a generator writing LF makes every file read as
+fully changed. If a tool writes bytes into a tracked file, pin that path.
+
+## Don't use `git checkout --` to undo a mutation inside a test
+
+Reverting a file to `HEAD` mid-test doesn't restore "the state before my mutation" — it
+restores the state before *the whole working session*. In the chrome migration this silently
+stripped one file's markers, dropping it out of the expander's target set, so the next run
+reported 38 files instead of 39 and the number looked like a tool bug rather than a test bug.
+
+Undo a mutation with its inverse, or rebuild the pipeline from a known commit. Reserve
+`git checkout --` for deliberate resets you have decided on, not for cleanup.
+
+## Validate everything before writing anything
+
+The first version of `build-chrome.mjs` expanded, wrote each file, and *then* reported
+problems — so a retired phone number got written into all 39 files before the error appeared.
+For any tool that fans one input out across many files, collect the full output in memory,
+run every assertion, and only then write. Prove it with a test that asserts zero files
+changed on a failing run; "it printed an error" is not the same as "it didn't do the damage".
+
 ## Verifying edits to `site/` — `--shortstat` is the line-ending canary
 
 `.gitattributes` pins `site/** -text` so mirrored content stays byte-exact. Any tool
