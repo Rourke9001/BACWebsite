@@ -1,0 +1,34 @@
+name: Checks
+
+# Runs on every PR and on the branches that deploy. Deliberately separate from
+# deploy.yml: these are gates on the code, not part of the deploy path.
+#
+# deploy.yml only watches PRs into main, but feature branches merge into develop,
+# so this watches both — otherwise the chrome check would first run at the point
+# the change is already on staging.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Catches both failure modes the generated-output-in-git tradeoff creates:
+      # someone hand-edited a generated region, or someone changed a partial and
+      # forgot to rebuild — including forgetting api/src/blog-templates/, which is
+      # 5% of the files but 73% of the public URLs.
+      - name: Site chrome is in sync with partials/ and data/site.json
+        run: node scripts/build-chrome.mjs --check
+
+      - name: API tests
+        working-directory: api
+        run: npm test

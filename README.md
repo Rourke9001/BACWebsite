@@ -10,7 +10,9 @@
 |------------|---------|
 | `site/`    | The static site — deploy artifact for Azure SWA (`app_location`), preserving the old URL structure (`/about/`, `/services/*.html`, `/video-hub/`, `/files/`). `/blog/*` does not live here — those routes are rewritten to the Function and served from Blob Storage. `staticwebapp.config.json` lives here too. |
 | `api/`     | Azure Functions (`api_location`): the contact/service form handler (honeypot + rate limiting, sends via Microsoft 365) and the dynamic blog — public rendering of `/blog/*` from the `blog` Blob Storage container plus the role-guarded admin API (`/api/blog-admin/*`) behind the `/admin/` UI. |
-| `scripts/` | `verify-site.mjs` — crawls a deployed environment and checks every page, link, redirect, and download. |
+| `partials/` | The shared site chrome — header, nav, footer, `<head>` links, GTM. Expanded into every page by `scripts/build-chrome.mjs`. **Edit here, not in the pages.** |
+| `data/`    | `site.json` — values repeated across the chrome (phone, WhatsApp, GTM id, logo paths, socials). **Edit here, not in the partials.** |
+| `scripts/` | `build-chrome.mjs` (expands the chrome), `verify-site.mjs` (crawls a deployed environment), `backup-blog.mjs` (pulls the blog container). |
 | `docs/`    | Runbooks: blog author guide, shared-header duplication. |
 | `archive/` | **Git-ignored, never committed.** Local copy of the previous site's backup (source + SQL dump). Contains credentials and form-submission PII. The authoritative backup lives outside this folder. |
 
@@ -49,6 +51,34 @@ swa start site --api-location api
 
 Don't open the HTML files directly from disk (`file://`) — links are root-relative
 (`/about/`, `/inc/css/...`) and only resolve through a web server.
+
+## Changing the header, footer, or a contact detail
+
+These live in **one place** and are expanded into all 39 chrome-bearing files
+(37 static pages + the 2 blog templates, which between them render 135 public URLs):
+
+```powershell
+# A value — phone, WhatsApp, GTM id, logo path, a social link:
+#   edit data/site.json
+# Structure — nav items, footer columns, header markup:
+#   edit the relevant file in partials/
+
+npm run build:chrome     # rewrites the 39 files in place
+git diff                 # review the real diff, then commit it
+```
+
+**Never hand-edit markup between `<!-- @chrome:… -->` and `<!-- @end:… -->`** — the next
+build overwrites it, and CI fails the PR before that can surprise anyone.
+
+The generated output is committed on purpose. It keeps `python -m http.server` a faithful
+preview (the files on disk are the real files), keeps SWA deploying `site/` with no build
+step in the deploy path, and makes every chrome change a reviewable diff. The cost —
+generated files in git — is paid for by `npm run check:chrome`, which CI runs on every PR
+and which fails if any file disagrees with `partials/` + `data/site.json`.
+
+Values are `${name}` in the partials, resolved from `data/site.json`. That syntax is
+deliberately *not* `{{name}}`: the blog templates are also chrome targets, and `{{…}}`
+belongs to `render.js`'s request-time substitution. An unknown or unused key is a build error.
 
 ## Branching & deploys
 
