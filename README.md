@@ -1,8 +1,8 @@
 # BAC Logistics — Static Website (baclogistics.co.za)
 
-Static rebuild of [baclogistics.co.za](https://baclogistics.co.za), migrated from a
-Linux/CouchCMS + MySQL host to **Azure Static Web Apps** (app `baclogistics`, resource
-group `rg-baclogistics-web`). Live on the custom domain since 23 July 2026.
+[baclogistics.co.za](https://baclogistics.co.za) on **Azure Static Web Apps** (app
+`baclogistics`, resource group `rg-baclogistics-web`). Live on the custom domain since
+23 July 2026; the previous host was retired once the migration was proven.
 
 ## Layout
 
@@ -11,8 +11,8 @@ group `rg-baclogistics-web`). Live on the custom domain since 23 July 2026.
 | `site/`    | The static site — deploy artifact for Azure SWA (`app_location`), preserving the old URL structure (`/about/`, `/services/*.html`, `/video-hub/`, `/files/`). `/blog/*` does not live here — those routes are rewritten to the Function and served from Blob Storage. `staticwebapp.config.json` lives here too. |
 | `api/`     | Azure Functions (`api_location`): the contact/service form handler (honeypot + rate limiting, sends via Microsoft 365) and the dynamic blog — public rendering of `/blog/*` from the `blog` Blob Storage container plus the role-guarded admin API (`/api/blog-admin/*`) behind the `/admin/` UI. |
 | `scripts/` | `verify-site.mjs` — crawls a deployed environment and checks every page, link, redirect, and download. |
-| `docs/`    | Runbooks: blog author guide, old-host decommission checklist. |
-| `archive/` | **Git-ignored, never committed.** Local copy of the old-site backup (CouchCMS source + SQL dump). Contains credentials and form-submission PII. The authoritative backup lives outside this folder. |
+| `docs/`    | Runbooks: blog author guide, shared-header duplication. |
+| `archive/` | **Git-ignored, never committed.** Local copy of the previous site's backup (source + SQL dump). Contains credentials and form-submission PII. The authoritative backup lives outside this folder. |
 
 ## What's on the site
 
@@ -68,7 +68,7 @@ Don't open the HTML files directly from disk (`file://`) — links are root-rela
 The blog is dynamic: Azure Functions render `/blog`, `/blog/*`, and `/sitemap-blog.xml`
 on request from post JSON + images in the `blog` Blob Storage container — there's no
 HTML in `site/` to edit and no deploy in the loop. Publishing happens through the
-`/admin/` Couch-style admin (Entra ID login, `blog_author` role via SWA invitation):
+`/admin/` blog admin (Entra ID login, `blog_author` role via SWA invitation):
 write the post, save, it's live within a minute or two — see
 **[docs/blog-author-guide.md](docs/blog-author-guide.md)** for the author walkthrough.
 The admin API lives at `/api/blog-admin/*` (the `admin/` route prefix is reserved by
@@ -150,6 +150,6 @@ Live secrets (blob storage connection string, Graph client secret) reside in the
 
 ## Sensitive data — read before committing
 
-Never commit: `archive/` (enforced via `.gitignore`), any `*.sql` dump, the old
-`couch/config.php` (plaintext production DB password), or `inc/form/logs|uploads`
+Never commit: `archive/` (enforced via `.gitignore`), any `*.sql` dump, the previous
+site's `config.php` (plaintext production DB password), or `inc/form/logs|uploads`
 (form-submission PII). `site/` is public content only.

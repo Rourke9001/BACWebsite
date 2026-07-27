@@ -12,6 +12,9 @@
 .adm-banner { display: flex; align-items: center; gap: 12px; padding: 14px 18px; margin: 0 0 20px;
   background: #eaf6ee; border: 1px solid #b7e0c3; border-radius: var(--radius);
   color: #1a7f37; font-weight: 600; overflow-wrap: anywhere; }
+/* An author `display` rule outranks the UA stylesheet's [hidden] { display: none },
+   so without this the banner ignores its `hidden` attribute and renders empty on load. */
+.adm-banner[hidden] { display: none; }
 .adm-banner a { color: inherit; white-space: nowrap; }
 .adm-banner-close { margin-left: auto; background: none; border: none; font: inherit;
   font-size: 1.2rem; line-height: 1; cursor: pointer; color: inherit; }
