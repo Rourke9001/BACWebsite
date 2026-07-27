@@ -113,6 +113,64 @@ transitively. When *checking* someone's figure, reconcile to within a few percen
 it unreproducible — a total that looks ~15 % short is usually a missed resource class, not a bad
 number.
 
+## "The pixels are identical" does not prove an image edit was lossless
+
+Stripping metadata from the site's images, the obvious check is to decode before and after
+and compare the raw samples:
+
+```python
+if Image.open(before).tobytes() != Image.open(after).tobytes():   # NOT SUFFICIENT
+```
+
+It passes on an edit that visibly changes the image. `tobytes()` returns the decoded
+*samples*; it says nothing about how those samples are meant to be *interpreted*. Drop a
+JPEG's APP2 segment and you have removed the ICC colour profile — every sample identical,
+every colour potentially shifted on a wide-gamut display. Drop APP14 and you have removed
+Adobe's colour-transform flag.
+
+The first version of `scripts/reencode-images.py` dropped APP1–APP15 wholesale and its
+pixel check passed on all 93 files. It would have silently discarded 43 colour profiles.
+
+Strip by naming what goes, never by naming a range that sweeps up what stays — APP1
+(EXIF/XMP), APP13 (Photoshop) and COM for JPEG; `tEXt`/`zTXt`/`iTXt` for PNG — and assert
+the things a sample comparison cannot see:
+
+```python
+before.info.get('icc_profile') == after.info.get('icc_profile')
+before.size == after.size and before.mode == after.mode
+```
+
+The general form: when you verify a transformation, check the *interpretation* metadata as
+well as the payload. A byte-for-byte payload match is a weaker claim than it appears.
+
+## Derive file sets by reference source, not by directory or basename
+
+`site/couch/uploads/` holds two intermixed sets — 69 images referenced by repo HTML and 87
+referenced only by `featured_image`/`json_ld` in blob post JSON. **The folder does not
+separate them**: blog images live in both `image/` and `image/blog/`.
+
+Deduplicating by *basename* also silently merges distinct files — five basenames
+(`air-freight.jpg`, `aog.jpg`, `bonded-warehousing.jpg`, `road-freight.jpg`,
+`sea-freight.jpg`) exist in two directories each. A basename-keyed derivation returned
+64 + 87 = 151 and looked plausible against a real folder; the correct path-keyed
+derivation returns 69 + 87 = 156.
+
+Key on the full path, and split on *who points at the file*. Then check the arithmetic
+adds up to the file count you can see on disk before building anything on it.
+
+## An extension change is only safe where the references are sweepable
+
+Stage 4 was briefed as "re-encode the 95 oversized images". 72 of them could not be
+touched: `render.js:55,109` emits `post.featured_image` verbatim, so a blog image's URL
+comes from post JSON in Blob Storage. Renaming the file in the repo would have 404'd all
+90 posts, and no repo-side sweep could have prevented it because the references are not in
+the repo.
+
+Before any rename, ask where the references actually live — not how many there are. Repo
+references are sweepable and provable in the same commit. References in a database, a blob
+store, or anything else outside the diff are a different and much larger change, and they
+usually belong in whichever stage is already rewriting that data.
+
 ## CSS: an author `display` rule silently defeats the `hidden` attribute
 
 `[hidden] { display: none }` lives in the **UA stylesheet**, so *any* author-stylesheet
