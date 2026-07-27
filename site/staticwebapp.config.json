@@ -31,6 +31,30 @@
       "rewrite": "/api/documents"
     },
     {
+      "route": "/couch/*",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "route": "/inc/font-awesome/*",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "route": "/inc/css/main.css",
+      "headers": {
+        "Cache-Control": "public, max-age=300"
+      }
+    },
+    {
+      "route": "/inc/js/main.js",
+      "headers": {
+        "Cache-Control": "public, max-age=300"
+      }
+    },
+    {
       "route": "/about.html",
       "redirect": "/about/",
       "statusCode": 301
