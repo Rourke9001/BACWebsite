@@ -131,6 +131,48 @@ Nameservers stay on domains.co.za (`ns1-4.dns-ns.host/.zone`). Lesson from the 2
 account transfer: registrar processes can silently rebuild the zone — export the zone
 before any registrar-side change, and re-verify these records after.
 
+### Blog content backup
+
+**The blog posts are the only data in this system that is not in git.** `site/` is
+versioned; the post JSONs in `bacblogcontent/blog/posts/` are not. Everything below was
+read from Azure on 2026-07-27.
+
+```powershell
+node scripts/backup-blog.mjs          # → backups/blog-<timestamp>/ (git-ignored)
+```
+
+It pulls every blob in the container, writes a `manifest.json` with a SHA-256 per blob,
+and re-hashes what it wrote before reporting success. `backups/` is git-ignored on
+purpose — it's a copy of live production data. **Keep at least one copy somewhere other
+than this machine**; a backup that only exists next to the thing it protects isn't one.
+
+Run it before any bulk change to post data, and on a routine you'll actually keep.
+
+#### What protects this data today, and what doesn't
+
+| | Setting | Effect |
+|---|---|---|
+| ✅ | `isVersioningEnabled: true` | An overwrite keeps the prior version. |
+| ✅ | `deleteRetentionPolicy: enabled, days: 30` | A deleted blob is recoverable for 30 days. |
+| ❌ | `containerDeleteRetentionPolicy: null` | **Deleting the container is not recoverable.** |
+| ❌ | `restorePolicy: null` | No point-in-time restore. |
+| ❌ | `sku: Standard_LRS` | Three copies, all in one West Europe datacenter. No zone or geo redundancy. |
+
+The first two are why `/admin/`'s delete prompt can promise recovery at all. They are
+storage-account configuration, not application behaviour — **nothing in the code
+guarantees them and anyone with portal access can switch them off.** If you change them,
+change the wording in `site/admin/admin.js` to match.
+
+#### Recommended, not yet done
+
+Switch the account from `Standard_LRS` to `Standard_GRS` (geo-redundant, replicates to a
+paired region). At 0.94 MB the cost difference is negligible. **This is an Azure change —
+it needs your approval and is not applied:**
+
+```powershell
+az storage account update -n bacblogcontent -g rg-baclogistics-web --sku Standard_GRS
+```
+
 ### Contact form
 
 `POST /api/contact-form` sends mail via Microsoft Graph using an Entra app registration

@@ -317,7 +317,10 @@ $('#adm-featured-file').addEventListener('change', async (e) => {
 });
 $('#adm-delete').addEventListener('click', async () => {
   if (!state.editingSlug) return;
-  if (!confirm('Delete this post? (Old versions are kept in storage for rollback.)')) return;
+  // The recovery promise below is true only because the storage account has blob soft
+  // delete (30 days) and versioning enabled — no code here guarantees it. If those
+  // settings change, change this wording. See README.md → Blog content backup.
+  if (!confirm('Delete this post? (Recoverable from storage for 30 days.)')) return;
   try {
     await api(`/api/blog-admin/posts/${state.editingSlug}`, { method: 'DELETE' });
     showList();
