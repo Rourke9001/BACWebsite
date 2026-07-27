@@ -57,6 +57,19 @@ hosting has no server-side includes. Before changing any header value, read
 `docs/shared-header-duplication.md`, and always sweep `api/src/blog-templates/` in the
 same commit or the blog header silently diverges from the rest of the site.
 
+## Page weight: count what the browser fetches, not what the markup declares
+
+A tag scan of `<link>`/`<script>`/`<img>` under-counts a page. `site/index.html` also pulls
+`background.jpg` from a `url()` inside an inline `<style>`, `favicon.ico` by convention with no
+`<link>`, and two font-awesome `.woff2` files via `@font-face` in `all.min.css` — 350 KB across
+four resources that no markup attribute names. A "23 resources" figure derived from tags is
+wrong by at least three fetches.
+
+When measuring page weight, either drive a real browser or walk CSS `url()` and `@font-face`
+transitively. When *checking* someone's figure, reconcile to within a few percent before calling
+it unreproducible — a total that looks ~15 % short is usually a missed resource class, not a bad
+number.
+
 ## CSS: an author `display` rule silently defeats the `hidden` attribute
 
 `[hidden] { display: none }` lives in the **UA stylesheet**, so *any* author-stylesheet

@@ -3,69 +3,61 @@
 Working plan for the current task (see CLAUDE.md — Task Management).
 Reset when a task completes; keep no long-term history here.
 
-## 2026-07-27 — Investigation: 502s, shared components, legacy asset path
+## 2026-07-27 — Validation of the investigation findings and the two briefs
 
-Brief: `docs/investigation-brief-shared-components.md`. Investigate and report;
-no production behaviour changes without approval.
+Re-verify every re-derivable claim in `docs/investigation-findings-2026-07-27.md`,
+`docs/brief-site-architecture-single-source.md`, `docs/brief-duplication-and-couch-removal.md`
+and the prior `tasks/todo.md` review, plus a first-principles review of the site and CMS setup.
+Read-only: nothing pushed, no Azure resource changed.
 
-### Workstream 1 — intermittent 502 on static assets
+### Re-derivation from source
 
-- [x] Confirm the reported cache headers and asset size on production
-- [x] Establish a quiet-period latency baseline (6 targets across apex/www/default hostname)
-- [x] Check Application Insights (`bac-swa-debug`) for the window
-- [x] Determine whether the Functions host is in the static path at all
-- [x] Measure `site/` size and the `site/couch/` share of it
-- [x] Reconstruct the deploy timeline from GitHub Actions and correlate
-- [x] Enable `StaticSiteHttpLogs` → `bac-debug-logs` (temporary — remove after)
-- [x] Controlled test: staging deploy while probing production at 2s intervals
-- [x] Concurrent full-page-load reproduction (the test that found the mechanism)
-- [x] Evaluate cache-header mitigation and the cache-busting strategy it requires
-
-### Workstream 2 — shared components and duplication
-
-- [x] Enumerate every full-shell page (`site/` + `api/src/blog-templates/`)
-- [x] Extract and hash each shared region per file; detect drift byte-exactly
-- [x] Detect duplicated blocks empirically, not only by named region
-- [x] Evaluate consolidation options and give a verdict
-
-### Workstream 3 — the `/couch/uploads/…` asset path
-
-- [x] Full reference inventory across tracked repo files
-- [x] Inventory references in the Blob Storage post JSON
-- [x] Check which `site/couch/` files are actually referenced
-- [x] Establish where blog images actually live today
-- [x] Verify on staging whether SWA wildcard redirects preserve the captured path
-- [x] Target path, redirect strategy, data migration, rollback, verdict
+- [x] Repo counts: 39 chrome files, 135 URLs, 202/42 `/couch/uploads` refs, `tel:`/`wa.me`
+- [x] **Independent drift re-measurement** — 10 regions, tag-balanced extraction, SHA-256 byte-exact
+- [x] Disk inventory: `site/couch/` size, oversized-image census
+- [x] OG/Twitter tag audit across all 39 files
+- [x] `staticwebapp.config.json` byte-identical to `571cd6d`; probe commit `1434906` reviewed
+- [x] Azure live state: diagnostic settings, CDN status, blob inventory, app-setting names
+- [x] **All 90 post JSONs downloaded and field-walked** (then deleted); `featured_image`/`json_ld`/
+      `body` reference counts, `og_image`, `unpublished`
+- [x] Live HTTP: cache headers, ETag, page weight, blog Function headers, 80-request burst
+- [x] Official Microsoft docs on `StaticSiteHttpLogs` and apex-domain guidance
+- [x] `api/` architecture review — storage model, image path, auth, caching, single responsibility
+- [x] Adversarial pass over my own findings before reporting
 
 ### Review
 
-Full report: **`docs/investigation-findings-2026-07-27.md`**.
+Full report: **`docs/validation-2026-07-27.md`**.
 
-**WS1.** The 502 did not reproduce in 2,166 requests, so no root cause is claimed. Two
-things were settled, though. The Functions host is provably not in the static path — 1,568
-static requests produced zero App Insights entries while `/blog/*` logs reliably, and
-Function telemetry has never recorded a 502. And the 10–20 s stalls reported alongside the
-502 turn out to be a *different* problem with a clear cause: sequential probing never
-exceeded 2.96 s, but loading the whole page concurrently — what a browser does — hit
-8.98 s, with TTFB at 0.77 s. The server answers promptly; the time goes into transfer of a
-2.02 MB page, 54 % of which is a single 1.1 MB PNG. Recommended, in order: re-encode that
-image, set real cache headers (every asset currently gets `max-age=30, must-revalidate`
-with a deployment-scoped ETag), keep `StaticSiteHttpLogs` on until a 502 is caught.
+**Verdict: the investigation holds up well.** Every claim the migration is sized on reproduces
+exactly — 90 posts / 0 unpublished, 96 blob refs = 90 `featured_image` + 6 `json_ld` + **0 in
+bodies**, 157 distinct paths (70 repo + 87 blob, disjoint), 202 refs across 42 files, 1,148,209
+bytes for `bac-header1.png`, deployment-scoped ETag identical across 8 resources, and **zero
+drift** on an independent re-measurement.
 
-**WS2.** Duplication is ~60 % of every page, but **drift is zero** — every shared region is
-byte-identical across all 39 full-shell pages, and the four near-universal-but-not-universal
-lines are legitimate structural differences. The case for a build step rested on drift risk
-that does not exist, so the prior "leave it" recommendation stands. Proposed a CI guard
-(`scripts/check-chrome.mjs`) that makes drift unmergeable without introducing a build step.
+**Three errors.** (1) The enterprise-grade CDN hypothesis for the missing `StaticSiteHttpLogs` is
+refuted — Azure lists the category as available on this exact resource with the CDN disabled, and
+acting on it would cost ~$17.52/mo for no documented benefit; an App Insights availability test
+does the actual job for ~$5.57/mo. (2) The `og:image` count is wrong in the safe direction —
+**135 of 135** public URLs render an empty `og:image`, not 128; no page has a populated one; and
+`twitter:image` is missing from the audit table. (3) "157 indexed image URLs" attaches a measured
+path count to an unmeasured SEO claim — and that premise is the sole justification for the
+redirect Function.
 
-**WS3.** Recommended **not** renaming. A precondition failed: SWA emits the destination `*`
-literally, verified on staging, so a wildcard redirect cannot preserve the path and 157
-indexed image URLs have no cheap way to keep resolving. Two brief assumptions were also
-corrected — post *bodies* contain no `/couch/uploads` references (all 96 stored references
-are `featured_image`/`json_ld`), and blog images are not in Blob Storage at all today.
+**One correction to my own audit:** I first reported the 2.02 MB home-page total as
+unreproducible. It reproduces to within 0.2 % once the font-awesome webfonts and favicon are
+counted. The total is right; the "23 resources" inventory is what is wrong.
 
-**Care taken.** The only production-facing change was a diagnostic setting, enabled with
-approval and documented for removal. A temporary probe route was pushed to `develop` to
-test wildcard redirects on staging and reverted immediately;
-`site/staticwebapp.config.json` is byte-identical to its pre-investigation state
-(`git diff 571cd6d..HEAD -- site/staticwebapp.config.json` is empty).
+**Five things none of the four documents examines**, two of which outrank the current plan: the
+90 post JSONs are the only unversioned data in the system and have **no backup** on a
+single-datacenter `Standard_LRS` account; and the apex `A` record is pinned to an IP from
+`stableInboundIp`, which now returns `null` and is absent from Microsoft's published schema. Also:
+the admin image-upload and document features are fully built, deployed and **completely unused**
+(the migration target for Part 2 already exists and already sets an immutable cache header); post
+saves have no concurrency control; and `README.md` counts are stale.
+
+**Sequencing recommendation stands** — architecture first, then `/couch/`. The redirect Function's
+precondition is proven rather than assumed: `documents.js:11-12` already recovers the original path
+from `x-ms-original-url` behind a live SWA rewrite.
+
+Revised order in §5 of the validation doc. Nothing committed or pushed.
