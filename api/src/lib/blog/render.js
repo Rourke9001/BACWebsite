@@ -5,6 +5,10 @@ const path = require('node:path');
 
 const ORIGIN = 'https://baclogistics.co.za';
 const POSTS_PER_PAGE = 12;
+// Share image for a post that has neither og_image nor featured_image. Same image the
+// static pages fall back to; it lives in the repo, so Stage 6b's /couch/ -> /media/
+// sweep must catch this line too.
+const DEFAULT_OG_IMAGE = '/couch/uploads/image/home/bac-header1.webp';
 const TPL_DIR = path.join(__dirname, '..', '..', 'blog-templates');
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
@@ -22,6 +26,28 @@ function esc(s) {
 
 function fill(template, values) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => (key in values ? values[key] : ''));
+}
+
+/**
+ * og:image must be an absolute URL — relative values are unreliable across scrapers and
+ * several ignore them outright. Stored values are root-relative (`/couch/uploads/...`),
+ * but /admin/ accepts a free-text og_image, so an author-supplied absolute URL has to
+ * survive untouched.
+ */
+function absoluteUrl(value) {
+  const v = String(value == null ? '' : value).trim();
+  if (!v) return '';
+  if (/^https?:\/\//i.test(v)) return v;
+  if (v.startsWith('//')) return `https:${v}`;
+  return ORIGIN + (v.startsWith('/') ? v : `/${v}`);
+}
+
+/**
+ * All 90 posts carry a featured_image and none carries an og_image, so without this
+ * coalescing every post renders an empty og:image. Explicit og_image still wins.
+ */
+function shareImage(post) {
+  return absoluteUrl(post.og_image || post.featured_image || DEFAULT_OG_IMAGE);
 }
 
 function formatDate(iso) {
@@ -95,7 +121,7 @@ function renderPost(post) {
     title_tag: esc(post.meta_title || post.title),
     meta_description: esc(post.meta_description),
     canonical: esc(canonical),
-    og_image: esc(post.og_image),
+    og_image: esc(shareImage(post)),
     robots_meta: post.robots ? `<meta name="robots" content="${esc(post.robots)}" />` : '',
     json_ld: post.json_ld ? `<script type="application/ld+json">\n${post.json_ld.replace(/<\//g, '<\\/')}\n</script>` : '',
     article_section: renderArticleSection(post),
