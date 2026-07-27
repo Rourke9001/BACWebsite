@@ -41,9 +41,9 @@ no production behaviour changes without approval.
 
 Full report: **`docs/investigation-findings-2026-07-27.md`**.
 
-**WS1.** The 502 did not reproduce in 1,661 requests, so no root cause is claimed. Two
-things were settled, though. The Functions host is provably not in the static path — over
-1,000 static requests produced zero App Insights entries while `/blog/*` logs reliably, and
+**WS1.** The 502 did not reproduce in 2,166 requests, so no root cause is claimed. Two
+things were settled, though. The Functions host is provably not in the static path — 1,568
+static requests produced zero App Insights entries while `/blog/*` logs reliably, and
 Function telemetry has never recorded a 502. And the 10–20 s stalls reported alongside the
 502 turn out to be a *different* problem with a clear cause: sequential probing never
 exceeded 2.75 s, but loading the whole page concurrently — what a browser does — hit

@@ -8,7 +8,7 @@ every claim here can be re-run.
 
 | Workstream | Verdict |
 |---|---|
-| 1 — intermittent 502 | **Root cause not established**; the 502 did not reproduce in 1,661 requests. But the *10–20 s stalls* reported alongside it are a **separate, explained problem**: bandwidth contention on a 2.02 MB home page, 54 % of which is one PNG. |
+| 1 — intermittent 502 | **Root cause not established**; the 502 did not reproduce in 2,166 requests. But the *10–20 s stalls* reported alongside it are a **separate, explained problem**: bandwidth contention on a 2.02 MB home page, 54 % of which is one PNG. |
 | 2 — duplication | **Leave it.** Duplication is real and large (~60 % of every page, 39 files behind 135 public URLs), but measured drift is **zero**. The case for a build step rested on drift risk that does not exist. Add a CI guard instead — and separately, fix `og:image`, which is empty on 128 of those 135 URLs. |
 | 3 — `/couch/uploads/…` | **Don't rename.** A precondition failed: SWA wildcard redirects do **not** preserve the captured path (proven on staging), so 157 indexed image URLs cannot be kept alive by a one-line rule. |
 
@@ -18,23 +18,23 @@ every claim here can be re-run.
 
 ### What was measured
 
-| Probe | Requests | Non-200 | p50 | max |
-|---|---:|---:|---:|---:|
-| Sequential, 6 targets × 3 hostnames, from 07:24 UTC | 393 | 0 | 0.92 s | 2.75 s |
-| Sequential, `/inc/css/main.css` @ 2 s, 07:40–07:56 UTC | 345 | 0 | 0.72 s | 2.21 s |
-| Sequential, `/` @ 2 s, 07:40–07:56 UTC | 325 | 0 | 0.89 s | 2.61 s |
-| **Concurrent** — 25 × full 23-resource page load | 598 | 0 | 0.55 s | **8.98 s** |
+| Probe | Requests | Non-200 | p50 | p99 | max |
+|---|---:|---:|---:|---:|---:|
+| Sequential, 6 targets × 3 hostnames, 07:24–08:39 UTC | 898 | 0 | 0.91 s | 2.05 s | 2.96 s |
+| Sequential, `/inc/css/main.css` @ 2 s, 07:40–07:56 UTC | 345 | 0 | 0.72 s | — | 2.21 s |
+| Sequential, `/` @ 2 s, 07:40–07:56 UTC | 325 | 0 | 0.89 s | — | 2.61 s |
+| **Concurrent** — 25 × full 23-resource page load | 598 | 0 | 0.55 s | 2.86 s | **8.98 s** |
 
-**1,661 requests, zero 502s, zero 5xx.** The failure is rarer than that.
+**2,166 requests over 75 minutes, zero 502s, zero 5xx.** The failure is rarer than that.
 
-(The first probe was still running when this was written; its count is as of 07:57 UTC
-and only grew. No non-200 was ever recorded on any probe.)
+All probes ran to completion; these are final figures. The anomaly log — which captured any
+request exceeding 3 s or returning a non-200 — is **empty for every sequential probe**.
 
 ### The Functions host is not in the static path — settled
 
-- Over 1,000 sequential static-asset requests produced **zero** entries in Application
-  Insights, while `/blog/*` requests appear there reliably. The instrumentation works;
-  static requests simply never reach the app.
+- 1,568 sequential static-asset requests produced **zero** entries in Application Insights,
+  while `/blog/*` requests appear there reliably. The instrumentation works; static
+  requests simply never reach the app.
 - The deployed `staticwebapp.config.json` matches the repo byte for byte (verified by
   behaviour: 301 on `/about.html`, 302 to Entra on `/admin/`, 404 override serving the
   2,709-byte `404.html`, `/blog/` served by the Function). **No route matches `/inc/*`
@@ -50,7 +50,7 @@ So the 502 was emitted by the SWA edge, which is the only server in the path.
 
 This is the part that *is* solved.
 
-- Sequential probing never exceeded **2.75 s** in 1,063 samples.
+- Sequential probing never exceeded **2.96 s** in 1,568 samples.
 - The same machine, same network, loading the **whole page concurrently** — which is what
   a browser does — hit **8.98 s**, and 3 of 25 page loads exceeded 3 s.
 - On that 8.98 s request, **TTFB was 0.77 s**. The server answered promptly; the
@@ -90,7 +90,7 @@ but it multiplies the number of chances to hit one.
 
 **H1 — transient SWA edge fault (most likely).** A 502 requires a server to answer, and
 the edge is the only candidate. The app provably never produced one. Rate is low enough
-that 1,661 requests missed it. Not falsifiable with the evidence available today —
+that 2,166 requests missed it. Not falsifiable with the evidence available today —
 which is precisely the gap now closed (below).
 
 **H2 — deploy-window content distribution.** The 502 and the stalls were observed inside
