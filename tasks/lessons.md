@@ -24,37 +24,6 @@ MSG
 Then check with `git log -1 --format='%s'` before pushing. A malformed subject is
 cheap to fix while unpushed and permanent afterwards.
 
-## Detecting line endings: measure raw bytes, and don't trust a shell pipeline to do it
-
-**`site/` is not uniformly LF, and `-text` does not mean LF — it pins BYTES.** Measured
-2026-07-28 across all 47 tracked text files under `site/`; 43 are LF and these four are not:
-
-| File | Endings | Trailing newline |
-|---|---|---|
-| `site/staticwebapp.config.json` | 118 CRLF, 0 bare LF | **no** |
-| `site/sitemap-static.xml` | 209 CRLF + **1 bare LF** at EOF | **no** |
-| `site/admin/admin.js` | 344 CRLF | yes |
-| `site/admin/index.html` | 146 CRLF | yes |
-
-Every prior handoff said "LF-pinned". That is wrong, and it is the expensive kind of wrong:
-a serialiser that writes LF into `staticwebapp.config.json` produces a ~118-line diff that
-is entirely line endings, and one that writes uniform CRLF into `sitemap-static.xml`
-silently changes its last byte. **Read the bytes of the specific file you are about to
-write, and prove your serialiser round-trips the *unmodified* file byte-for-byte before
-you trust it with modified content.** `git show HEAD:<file>` compared to the working copy
-settles it in one line — under `-text` they must be identical.
-
-Related, and how the four above were nearly missed twice in one session: a byte count is
-only as good as the pipeline computing it. Counting `0d` bytes across `git ls-files site/`
-flags **87 files** — because a `0d` inside a PNG or a `.woff2` is data, not a line ending.
-Then `od | tr | paste | grep -o '0d 0a'` under-reported CRLF on the text files that were
-left. Both looked authoritative. Filter to text files and count on the raw buffer:
-
-```python
-d = open(f, 'rb').read()
-d.count(b'\r\n'), d.count(b'\n') - d.count(b'\r\n'), d.endswith(b'\n')
-```
-
 ## Detecting line endings: `grep -c $'\r$'` lies — use `xxd`
 
 A check of the form
@@ -247,6 +216,75 @@ four investigation documents had noticed.
 A write-then-report tool would have written 39 files and printed a warning nobody read.
 Assertions that stop the run are how unrelated defects surface — so make them about the
 *desired end state*, not just about your own transformation.
+
+## A rename verified *inside* the repo is still unverified *outside* it
+
+Stage 4 re-encoded 23 static images to WebP and swept every repo reference in the same
+commit. Its verification was sound and internally complete: no dangling references, diff
+arithmetic exact, tests green. It shipped to `develop` and nobody noticed a problem —
+because there wasn't one *in the repo*.
+
+Outside the repo, those 23 URLs were live on production and at least 5 were indexed by
+Google Images. Merging `develop` into `main` would have 404'd them. The defect was
+invisible to every check we ran because every check we ran pointed inward.
+
+`tasks/lessons.md` already says an extension change is only safe where the references are
+sweepable. The missing half: **repo references are not the only references.** Search
+engines, external links, and anything that bookmarked a URL all hold references you cannot
+grep. Before deleting or renaming any publicly-reachable path, ask what the outside world
+already points at — `site:` on Google Images and a probe of the live URL each take a
+minute — and decide redirect-or-404 deliberately rather than by omission.
+
+## `-text` in `.gitattributes` pins *bytes*, it does not mean "LF"
+
+Every handoff in this repo has described `site/**`, `partials/**`, `data/**` and
+`api/src/blog-templates/**` as "LF-pinned". That is a paraphrase, and it is wrong in a
+way that bites. `-text` disables EOL conversion — it preserves whatever bytes are
+committed. Most files under those paths happen to be LF, but four are not. Measured
+2026-07-28 across all 47 tracked text files under `site/`; 43 are LF and these are not:
+
+| File | Endings | Trailing newline |
+|---|---|---|
+| `site/staticwebapp.config.json` | 118 CRLF, 0 bare LF | **no** |
+| `site/sitemap-static.xml` | 209 CRLF + **1 bare LF** (the blank line before `</urlset>`) | **no** |
+| `site/admin/admin.js` | 344 CRLF | yes |
+| `site/admin/index.html` | 146 CRLF | yes |
+
+So it is not one exceptional file: `sitemap-static.xml` is *mixed*, and a generator that
+writes uniform CRLF into it changes a byte just as surely as one that writes uniform LF.
+
+A generator that asserts `b'\r' not in raw` therefore refuses to touch a perfectly
+healthy file, and — worse — a generator that "normalises to LF" rewrites all 118 lines,
+producing exactly the fully-changed diff the pin exists to prevent.
+
+Don't assume the convention; read the bytes of the specific file and reproduce them:
+
+```python
+CRLF = b'\r\n' in raw
+TRAILING_NEWLINE = raw.endswith(b'\n')
+```
+
+Then prove the serialiser is faithful *before* trusting it with modified content:
+
+```python
+if serialise(json.loads(raw)) != raw:
+    sys.exit('serialiser is not byte-faithful on the unmodified file; aborting')
+```
+
+That round-trip check is what caught the missing trailing newline here — a 2-byte
+difference that no line-level diff would have shown.
+
+One more trap, met while re-deriving the table above: **a byte count is only as good as
+the pipeline computing it.** Counting `0d` bytes across `git ls-files site/` flags **87
+files** — because a `0d` inside a PNG or a `.woff2` is data, not a line ending. Filtering
+to text files and then counting CRLF with `od | tr | paste | grep -o '0d 0a'` *still*
+under-reported. Both answers looked authoritative. Filter to text files and count on the
+raw buffer, never through a shell pipeline:
+
+```python
+d = open(f, 'rb').read()
+d.count(b'\r\n'), d.count(b'\n') - d.count(b'\r\n'), d.endswith(b'\n')
+```
 
 ## Assert the end state you want, not the transformation you happen to be doing
 
