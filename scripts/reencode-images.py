@@ -38,7 +38,7 @@ import subprocess
 import sys
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageCms
 except ImportError:
     sys.exit("Pillow is required:  python -m pip install Pillow")
 
@@ -47,6 +47,7 @@ IMAGE_ROOT = os.path.join("site", "couch", "uploads")
 SEARCH_DIRS = ["site", "api"]
 SIZE_THRESHOLD = 500 * 1024
 QUALITY = 90
+ALLOWED_ICC = "sRGB IEC61966-2.1"
 REF_RE = re.compile(r"/couch/uploads/[A-Za-z0-9._/-]*")
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 
@@ -140,14 +141,34 @@ def strip_metadata(data, ext):
     return data
 
 
+def icc_description(profile):
+    try:
+        return ImageCms.getProfileDescription(
+            ImageCms.ImageCmsProfile(io.BytesIO(profile))).strip()
+    except Exception:
+        return "unreadable"
+
+
 def encode_webp(path):
+    """Re-encode to WebP.  Returns the ICC profile description so the caller can guard it.
+
+    Pillow does NOT write icc_profile on save unless you pass it, so a re-encode drops
+    the profile silently.  That is fine here for one measured reason only: every profile
+    in this repo is plain 'sRGB IEC61966-2.1', which is exactly what a browser assumes
+    for an untagged image, so dropping it costs nothing and saves ~3 KB a file.  The
+    reasoning does not generalise, and unlike strip_metadata() above -- where a decoded
+    sample comparison can prove the payload is untouched -- a lossy re-encode cannot be
+    checked that way at all.  So the caller refuses anything non-sRGB rather than
+    trusting this to stay true (tasks/lessons.md, "the pixels are identical").
+    """
     im = Image.open(path)
+    profile = im.info.get("icc_profile")
     uses_alpha = (im.mode in ("RGBA", "LA", "PA")
                   and im.convert("RGBA").getchannel("A").getextrema()[0] < 255)
     src = im.convert("RGBA") if uses_alpha else im.convert("RGB")
     buf = io.BytesIO()
     src.save(buf, "WEBP", quality=QUALITY, method=6)
-    return buf.getvalue(), src.size, uses_alpha
+    return buf.getvalue(), src.size, uses_alpha, icc_description(profile) if profile else None
 
 
 def main():
@@ -169,7 +190,10 @@ def main():
     saved_before = saved_after = 0
 
     for rel, url, size in big:
-        data, dims, alpha = encode_webp(os.path.join(ROOT, rel))
+        data, dims, alpha, icc = encode_webp(os.path.join(ROOT, rel))
+        if icc and icc != ALLOWED_ICC:
+            errors.append(f"{rel}: ICC profile is {icc!r}, not {ALLOWED_ICC!r} -- "
+                          f"re-encoding would drop it and shift colour; see encode_webp()")
         new_rel = os.path.splitext(rel)[0] + ".webp"
         new_url = os.path.splitext(url)[0] + ".webp"
         if os.path.exists(os.path.join(ROOT, new_rel)):
@@ -231,8 +255,10 @@ def main():
 
     ref_total = sum(h for _, _, h in edits.values())
     strip_bytes = sum(len(a) - len(b) for _, a, b in strips)
-    print(f"\nre-encode : {len(renames)} files, {saved_before:,} -> {saved_after:,} bytes"
-          f"  (-{100 - round(saved_after * 100 / saved_before)}%)")
+    # Re-running after Stage 4 finds nothing over the threshold, which is the healthy
+    # steady state — not a reason to crash on a percentage of zero.
+    pct = f"  (-{100 - round(saved_after * 100 / saved_before)}%)" if saved_before else ""
+    print(f"\nre-encode : {len(renames)} files, {saved_before:,} -> {saved_after:,} bytes{pct}")
     print(f"references: {ref_total} occurrences across {len(edits)} files")
     print(f"metadata  : {len(strips)} files stripped losslessly, {strip_bytes:,} bytes removed")
 
@@ -242,7 +268,7 @@ def main():
 
     # ---- phase 2: everything validated, now write --------------------------
     for old, new, *_ in renames:
-        data, _, _ = encode_webp(os.path.join(ROOT, old))
+        data, _, _, _ = encode_webp(os.path.join(ROOT, old))
         with open(os.path.join(ROOT, new), "wb") as fh:
             fh.write(data)
         os.remove(os.path.join(ROOT, old))

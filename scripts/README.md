@@ -60,12 +60,35 @@
      dropping those changes how identical pixels are displayed, which a decoded-pixel
      comparison would not catch.
 
-  **It does not re-encode blog images, on purpose.** `render.js` emits
-  `post.featured_image` verbatim (`render.js:55,109`), so a blog image's URL comes from
-  post JSON in Blob Storage, not from this repo — renaming one here would 404 every post
-  that references it. Those are re-encoded in Stage 6a instead, where they move to Blob
-  Storage under new names anyway. The two sets are separated by **reference source, not
-  directory**: blog and static images share folders, so the folder tells you nothing.
+  **It does not touch blog images, on purpose** — those moved to Blob Storage in Stage 6a
+  (see `migrate-blog-images.py` below). The two sets are separated by **reference source,
+  not directory**: blog and static images shared folders, so the folder told you nothing.
 
   Per `tasks/lessons.md`, every encode, reference edit and assertion runs against
   in-memory buffers first; a failing run writes nothing at all.
+
+- **migrate-blog-images.py** — Stage 6a. Produced the WebP payload for the 87 blog images
+  that moved from `site/couch/uploads/` into Blob Storage under `uploads/`, served at
+  `/blog/media/<file>`. Requires Pillow. Kept because it documents and re-derives the
+  migration, and because its assertions are the record of why the render-time map is safe.
+
+  ```
+  python scripts/migrate-blog-images.py --check       # report, write nothing
+  python scripts/migrate-blog-images.py --out <dir>   # encode into <dir>
+  ```
+
+  It derives the image set from post JSON by **reference source** — a blog image is one
+  referenced only by `featured_image` / `json_ld` in a post blob — and asserts the two
+  invariants that let `render.js` map paths with a single rule instead of a lookup table:
+  every basename is unique, and none collides once the extension becomes `.webp`.
+
+  It encodes and uploads nothing to Azure itself. Uploading is a separate deliberate step:
+
+  ```
+  az storage blob upload-batch --account-name bacblogcontent --destination blog \
+     --destination-path uploads --source <dir> --content-type image/webp \
+     --auth-mode key --overwrite false
+  ```
+
+  `--auth-mode login` is denied on this account — no data-plane RBAC is assigned, so the
+  CLI must fall back to the account key.
