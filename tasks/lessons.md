@@ -198,6 +198,54 @@ A write-then-report tool would have written 39 files and printed a warning nobod
 Assertions that stop the run are how unrelated defects surface — so make them about the
 *desired end state*, not just about your own transformation.
 
+## A rename verified *inside* the repo is still unverified *outside* it
+
+Stage 4 re-encoded 23 static images to WebP and swept every repo reference in the same
+commit. Its verification was sound and internally complete: no dangling references, diff
+arithmetic exact, tests green. It shipped to `develop` and nobody noticed a problem —
+because there wasn't one *in the repo*.
+
+Outside the repo, those 23 URLs were live on production and at least 5 were indexed by
+Google Images. Merging `develop` into `main` would have 404'd them. The defect was
+invisible to every check we ran because every check we ran pointed inward.
+
+`tasks/lessons.md` already says an extension change is only safe where the references are
+sweepable. The missing half: **repo references are not the only references.** Search
+engines, external links, and anything that bookmarked a URL all hold references you cannot
+grep. Before deleting or renaming any publicly-reachable path, ask what the outside world
+already points at — `site:` on Google Images and a probe of the live URL each take a
+minute — and decide redirect-or-404 deliberately rather than by omission.
+
+## `-text` in `.gitattributes` pins *bytes*, it does not mean "LF"
+
+Every handoff in this repo has described `site/**`, `partials/**`, `data/**` and
+`api/src/blog-templates/**` as "LF-pinned". That is a paraphrase, and it is wrong in a
+way that bites. `-text` disables EOL conversion — it preserves whatever bytes are
+committed. Most files under those paths happen to be LF, but
+`site/staticwebapp.config.json` is committed **CRLF with no trailing newline**, and the
+pin faithfully preserves that.
+
+A generator that asserts `b'\r' not in raw` therefore refuses to touch a perfectly
+healthy file, and — worse — a generator that "normalises to LF" rewrites all 118 lines,
+producing exactly the fully-changed diff the pin exists to prevent.
+
+Don't assume the convention; read the bytes of the specific file and reproduce them:
+
+```python
+CRLF = b'\r\n' in raw
+TRAILING_NEWLINE = raw.endswith(b'\n')
+```
+
+Then prove the serialiser is faithful *before* trusting it with modified content:
+
+```python
+if serialise(json.loads(raw)) != raw:
+    sys.exit('serialiser is not byte-faithful on the unmodified file; aborting')
+```
+
+That round-trip check is what caught the missing trailing newline here — a 2-byte
+difference that no line-level diff would have shown.
+
 ## CSS: an author `display` rule silently defeats the `hidden` attribute
 
 `[hidden] { display: none }` lives in the **UA stylesheet**, so *any* author-stylesheet

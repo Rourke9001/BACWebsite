@@ -10,15 +10,24 @@ Corrected figures come from `docs/validation-2026-07-27.md`.
 
 ### Stage 0 — gates — CLOSED
 
-- [x] **Gate 1 — `/couch/uploads/` indexing.** No Search Console access, so unmeasurable
-      today. **Deferred to Stage 6b (PR 7).** Owner has domains.co.za access and wants to
-      set the property up together before then — TXT verification record, nothing near
-      MX/SPF/DKIM. Standing recommendation: build the redirect Function. The validation
-      doc removed the reason it was thought expensive (no router change needed — all 87
-      blog basenames already match `^[A-Za-z0-9][A-Za-z0-9._-]*$`), and `documents.js:11-12`
-      already runs the `x-ms-original-url` pattern in production. A 301 transfers
-      accumulated ranking to the new URL; a 404 discards it. Skipping is a defensible
-      owner call.
+- [x] **Gate 1 — `/couch/uploads/` indexing. MEASURED 2026-07-28, no longer deferred.**
+      Search Console verified (Domain property, DNS TXT, auto-verified). Answers:
+      - **Indexed: yes, comprehensively.** Google Images `site:baclogistics.co.za` yields
+        **≥47 distinct image URLs, 47 of 47 under `/couch/uploads/`** (26 `image/`,
+        9 `services/`, 5 `blog/`, 5 `home/`, 2 `header/`). 47 is a *floor* — Google caps
+        these result sets. So the brief's "if few or none, Stage 6 collapses to a rename
+        plus a sweep" fallback is **off the table**.
+      - **Worth anything: apparently not.** Image search = **0 clicks, 27 impressions,
+        avg position 38.9** (≈ page 4). Web search = 5 clicks, 222 impressions, pos 16.1.
+      - **Caveat, load-bearing:** that is **one day** of data (Jul 26 2026). GSC did not
+        backfill on verification. Re-read before committing to 6b's architecture — the
+        pre-existing sitemap submissions (Jun 2026 and Jul 2023) prove Google holds
+        history for this domain, so more may materialise.
+      - 46 of the 47 return 200 today; 1 (`the-advantages-of-professional-handling-…jpg`)
+        already 404s — an old-site URL Google still holds, i.e. the image index is sticky.
+      - `site/robots.txt:2` has a blank `Disallow:` — `/couch/` has always been crawlable.
+      - Sitemap `https://baclogistics.co.za/sitemap.xml` re-submitted (was last read
+        Jul 19, four days *before* the Azure go-live, so it was stale).
 - [x] **Gate 2 — existing blog backup?** **No.** Answered from evidence, not recollection:
       - `archive/` + the WeTransfer zip are the *pre-migration CouchCMS* site (SQL + PHP).
         An ancestor of the content, not a copy of it.
@@ -228,6 +237,31 @@ four social icons, `partials/header-top.html:54-79`, and none is X).
 - [ ] **Only one page in `site/` carries JSON-LD at all.** The other 16 video pages have no
       `VideoObject` schema, and no page carries `Organization` or `LocalBusiness`. Out of
       scope here; worth its own stage if search visibility matters.
+
+### Stage 4 follow-up — redirect the re-encoded `/couch/` images (branch `feature/couch-image-redirects`)
+
+Found while measuring Gate 1, **not** in any brief. Stage 4 re-encoded 23 static images to
+WebP and swept every repo reference — internally correct, fully verified, and green. But
+`main` is still on PR #14, so those 23 old URLs are **live on production right now**, and
+5 of them are indexed by Google Images. Merging `develop` → `main` would 404 them.
+
+- [x] All 23 removed files confirmed to have an exact 1:1 `.webp` replacement on `develop`
+      (asserted present in the tree *and* on disk; no orphans)
+- [x] 23 × `301` added to `site/staticwebapp.config.json`
+- [x] **Inserted ahead of the `/couch/*` cache-header rule** — SWA applies the *first*
+      matching route, so placing them after it would have made all 23 dead entries.
+      Asserted programmatically: `max(redirect index) < index('/couch/*')`
+- [x] Routes 20 → 43; diff `115+/0−` = exactly 23 × 5 lines, 0 changed lines outside a
+      redirect block; `check:chrome` 39/39; api 58/58
+- [x] CRLF + no-trailing-newline preserved (see the new `-text` lesson — this file is
+      **not** LF despite the "LF-pinned" shorthand in every handoff)
+- [ ] **Verify on staging after merge** — the redirects cannot be tested before then; PRs
+      into `develop` get no preview environment
+
+Deliberately *not* done: nothing here changes Stage 6b's decision. 6b moves 156 files and
+SWA config cannot express a pattern redirect with capture (`/couch/*` can only target one
+fixed destination), so 6b means ~156 explicit entries or a Function. Doing 23 first tells
+us how badly that scales while the blast radius is small.
 
 ### Derived independently this session (reproduces the brief exactly)
 
