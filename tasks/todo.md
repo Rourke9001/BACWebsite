@@ -153,8 +153,9 @@ templates render with zero unresolved `${}` or `{{}}` tokens.
       descriptions follow-up (PR #22). Detailed plan below.
 - [x] **HARD STOP — Google Search Console.** ✅ Done 2026-07-28. Domain property, DNS TXT,
       auto-verified; sitemap re-submitted the same day. MX/SPF/DKIM untouched.
-- [ ] Stage 6a — 87 blog images to Blob Storage (PR 6) — **in progress**, branch
-      `feature/blog-images-to-blob`. Detailed plan below.
+- [ ] Stage 6a — 87 blog images to Blob Storage — **PR #25 open**, branch
+      `feature/blog-images-to-blob`. Detailed plan below. Only the post-merge staging
+      verification remains.
 - [ ] Stage 6b — 69 static images to `site/media/`, redirect decision (PR 7)
 - [ ] Stage 7 — housekeeping (PR 8)
 
