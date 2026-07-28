@@ -31,6 +31,145 @@
       "rewrite": "/api/documents"
     },
     {
+      "route": "/couch/uploads/image/about/about_us.png",
+      "redirect": "/couch/uploads/image/about/about_us.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/about/artboard-1.jpg",
+      "redirect": "/couch/uploads/image/about/artboard-1.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/about/broughton-avatar123.jpg",
+      "redirect": "/couch/uploads/image/about/broughton-avatar123.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/blog/news.png",
+      "redirect": "/couch/uploads/image/blog/news.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/contact/contact.png",
+      "redirect": "/couch/uploads/image/contact/contact.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/home/bac-header1.png",
+      "redirect": "/couch/uploads/image/home/bac-header1.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/aerospace-aog-cargo.png",
+      "redirect": "/couch/uploads/image/services/aerospace-aog-cargo.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/air-freight-services.png",
+      "redirect": "/couch/uploads/image/services/air-freight-services.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/bonded-warehousing-services.png",
+      "redirect": "/couch/uploads/image/services/bonded-warehousing-services.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/cross-border-local-transport.png",
+      "redirect": "/couch/uploads/image/services/cross-border-local-transport.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/customs-clearing-for-businesses.png",
+      "redirect": "/couch/uploads/image/services/customs-clearing-for-businesses.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/customs-consultations-service.png",
+      "redirect": "/couch/uploads/image/services/customs-consultations-service.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/customs-consultations.png",
+      "redirect": "/couch/uploads/image/services/customs-consultations.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/customs-solutions-services.png",
+      "redirect": "/couch/uploads/image/services/customs-solutions-services.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/customs-solutions.png",
+      "redirect": "/couch/uploads/image/services/customs-solutions.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/high-value-consignment-services.png",
+      "redirect": "/couch/uploads/image/services/high-value-consignment-services.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/liquor-transport-services.png",
+      "redirect": "/couch/uploads/image/services/liquor-transport-services.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/mining-transport.png",
+      "redirect": "/couch/uploads/image/services/mining-transport.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/pre-clearance-services-for-businesses-individuals.png",
+      "redirect": "/couch/uploads/image/services/pre-clearance-services-for-businesses-individuals.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/road-transport.jpeg",
+      "redirect": "/couch/uploads/image/services/road-transport.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/road_freight.png",
+      "redirect": "/couch/uploads/image/services/road_freight.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/services/sea-freight-services.png",
+      "redirect": "/couch/uploads/image/services/sea-freight-services.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/uploads/image/video-hub/video_hub.png",
+      "redirect": "/couch/uploads/image/video-hub/video_hub.webp",
+      "statusCode": 301
+    },
+    {
+      "route": "/couch/*",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "route": "/inc/font-awesome/*",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "route": "/inc/css/main.css",
+      "headers": {
+        "Cache-Control": "public, max-age=300"
+      }
+    },
+    {
+      "route": "/inc/js/main.js",
+      "headers": {
+        "Cache-Control": "public, max-age=300"
+      }
+    },
+    {
       "route": "/about.html",
       "redirect": "/about/",
       "statusCode": 301

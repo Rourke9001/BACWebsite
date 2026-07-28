@@ -1,8 +1,19 @@
-# Why one phone number lives in 78 places
+# Why one phone number used to live in 78 places
+
+> **Resolved 2026-07-27.** The duplication described below is gone. The chrome is now
+> expanded from `partials/` + `data/site.json` by `scripts/build-chrome.mjs`, and a CI
+> check fails any PR whose generated files disagree with those sources. Changing a
+> contact detail is one edit to `data/site.json` plus `npm run build:chrome` — see
+> **README → Changing the header, footer, or a contact detail**.
+>
+> This document is kept because the *analysis* is still the reason the fix looks the way
+> it does. Read the sections below as history, not as current instructions; the
+> "Changing a header value safely" recipe in particular is **superseded** — do not sweep
+> by hand any more.
 
 Written 2026-07-27, after the WhatsApp number change (`+27 83 375 5906` → `+27 11 353 1111`)
-touched 39 files. This explains why a one-number edit is a 39-file sweep, what else has the
-same shape, and what we would have to change to fix it.
+touched 39 files. This explains why a one-number edit was a 39-file sweep, what else had the
+same shape, and what we changed to fix it.
 
 ## The arithmetic
 
@@ -65,14 +76,21 @@ The lesson from the `tel:` count: contact details live in page *content* as well
 copied header, and a `grep`-and-replace tuned to the header pattern will silently miss those.
 Always count first and reconcile the count against `pages × 2` before replacing.
 
-### Known inconsistency
+### Known inconsistency — closed
 
-`privacy-policy.html:804` still reads `Mobile: +27 83 375 5906`. That was scoped out of the
-2026-07-27 change on purpose — the instruction was "just the WhatsApp numbers." It is recorded
-here so it is a known state rather than a surprise. Decide separately whether the privacy
-policy's stated contact number should track the WhatsApp number, the landline, or neither.
+This section used to record that `privacy-policy.html:804` still read
+`Mobile: +27 83 375 5906`. **It no longer does** — that was fixed in `571cd6d`, and a
+tree-wide grep for both `83 375 5906` and `0833755906` now returns nothing.
 
-## Changing a header value safely
+The expander enforces it going forward: `scripts/build-chrome.mjs` carries a list of
+retired values and refuses to write — or, in `--check`, fails the PR — if any of them
+reappears anywhere in the 39 files. That covers page body content, not just chrome, which
+is the gap a marker-keyed expander would otherwise leave.
+
+## Changing a header value safely — SUPERSEDED
+
+> Do not do this any more. It is `npm run build:chrome` now. The recipe is kept only
+> because its step 3 is still how you check *any* bulk edit to `site/`.
 
 ```bash
 # 1. Count first — know the number you expect to change.
@@ -95,23 +113,49 @@ will show every line of every file as changed, and that is easy to miss in a 39-
 `git diff --shortstat` reporting exactly `2 × files` insertions is the cheap proof that only
 the intended substrings moved.
 
-## Should we fix it?
+## What we did — and what the options were
 
-Not urgently, and not as a side quest. The honest trade-off:
+The original recommendation here was **leave it**, on the grounds that header changes are
+rare and the sweep is a reliable recipe. That was overtaken: the sweep itself is what
+prompted the review, and the owner's requirement was explicit — *"if I need to update the
+WhatsApp number, I want to change it in one place."*
 
-**Leave it.** Header changes are rare (this is the first since migration), and the sweep is a
-reliable three-command recipe with a verifiable diff. The cost is real but small and bounded.
+**Chosen: partials + a data file + a build-time expander, output committed.**
+`partials/` holds structure, `data/site.json` holds values, `scripts/build-chrome.mjs`
+expands both into the 39 files in place, and CI fails any PR where the two disagree.
 
-**Build-step templating** (e.g. render `site/` from a layout + per-page content at deploy
-time). This is the correct fix, and it removes the whole class of problem. But it ends the
-"plain files, no build" property that makes local preview and byte-exactness trivial, changes
-the GitHub Actions workflow, and touches all 39 pages in one commit — a large diff to review
-against a live site for a problem that currently costs one sweep a year.
+The key move that made this cheap was scoping it to the *chrome only*. The expander does
+not render pages — it replaces marked regions and leaves every byte outside them alone. So
+the "large diff to review against a live site" objection below evaporated: the migration
+commit adds 704 inert HTML comments and changes **zero** bytes of served content, which was
+verified by stripping the markers back out and comparing to the previous commit.
 
-**Client-side injection** (a script that writes the header into every page). Rejected: it puts
-the primary CTAs and phone number behind JavaScript, which is bad for SEO on a site whose
-value is search traffic, and it would flash-render the top bar.
+The alternatives, and why they lost:
 
-Recommendation: leave it, and keep this document current. If a second or third header change
-lands within a year, that is the signal to reconsider the build step — and at that point the
-right move is to template the header alone, not the whole page.
+**Full build-step templating** (render `site/` from a layout + per-page content). Solves a
+bigger problem than exists. Drift was measured at zero across all 39 files and the site is
+37 stable pages; a framework adds a dependency surface and a migration for no gain here. It
+would also end the "plain files, no build" property — which the chosen approach keeps,
+because the files on disk stay the real files.
+
+**Client-side injection** (a script that writes the header into every page). Rejected: it
+puts the primary CTAs and phone number behind JavaScript, which is bad for SEO on a site
+whose value is search traffic, and it would flash-render the top bar.
+
+**Server-side includes.** SWA static hosting has none.
+
+**Function-rendered pages.** Moves 37 static pages behind the Functions host, makes
+whole-site availability depend on it, and cold pages get slower (~650 ms static TTFB vs
+~1.2 s cold Function, measured).
+
+**A data file with no partials.** Meets the WhatsApp requirement but not nav or footer
+structure, and needs a second mechanism for the blog templates. The scalar half of it
+survives as `data/site.json`.
+
+### The one thing worth keeping load-bearing
+
+`api/src/blog-templates/{index,post}.html` are targets of the **same** expander as `site/`.
+They are 2 of 39 files but carry 98 of 135 public URLs — `post.html` alone renders 90 posts.
+A design that templated `site/` and left the blog on a separate mechanism would have fixed
+5% of the files and 27% of the URLs while looking finished. The CI check covers both trees
+for exactly this reason.

@@ -17,3 +17,7 @@ Thumbs.db
 
 # One-off migration script output (regenerable, not source of truth)
 scripts/out/
+
+# Local blog-content backups (scripts/backup-blog.mjs). These are a copy of live
+# production data — keep them out of git and store them somewhere off this machine.
+backups/

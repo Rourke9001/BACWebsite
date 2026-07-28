@@ -2,8 +2,9 @@
 /**
  * Verify a deployed copy of site/ (staging, a PR preview, or production):
  * every page loads, every same-site reference on every page resolves, the
- * configured redirects + 404 page behave, and the downloadable docs serve
- * with the right content-type. Zero dependencies.
+ * configured redirects + 404 page behave, the downloadable docs serve with
+ * the right content-type, and every page carries populated og:/twitter:
+ * metadata. Zero dependencies.
  *
  * The static page list comes straight from the site/ filesystem (not
  * sitemap.xml, which is incomplete); the dynamic blog pages (served from
@@ -18,7 +19,7 @@
  */
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const DEFAULT_BASE = 'https://baclogistics.co.za';
 const BASE = new URL(process.argv[2] || DEFAULT_BASE);
@@ -39,6 +40,31 @@ const ALLOWED_EXTERNAL_HOSTS = new Set([
   'www.facebook.com', 'www.instagram.com', 'www.linkedin.com',
   'wa.me', 'share.google', 'www.google.com', 'maps.google.com', 'www.multi.co.za',
 ]);
+
+// Social tags that must carry a value on every public URL. Absent or content="" means a
+// share on Facebook/LinkedIn/X renders without an image or attribution — the state all 135
+// URLs were in before Stage 5. og:image itself is checked twice over: extractRefs() below
+// already picks up absolute <meta content> URLs, so a populated-but-404 image still fails.
+const SOCIAL_REQUIRED = [
+  'og:locale', 'og:type', 'og:title', 'og:url', 'og:site_name', 'og:image',
+  'twitter:card', 'twitter:title', 'twitter:image',
+];
+
+// The stripped shells carry no chrome and are deliberately excluded from the 39
+// chrome-bearing files, so they carry no social tags either. /404.html is not a public
+// URL anyone shares — it is reached by the 404 response override, which is probed
+// separately above. Asserting share metadata on it fails a page that is correct.
+// (/admin/* is excluded from the crawl entirely, at the urls filter below.)
+const NO_SOCIAL_META = new Set(['/404.html']);
+
+function missingSocialMeta(html) {
+  const found = new Map();
+  for (const m of html.matchAll(/<meta\s[^>]*\b(?:property|name)\s*=\s*"((?:og|twitter):[^"]+)"[^>]*>/gi)) {
+    const content = m[0].match(/\bcontent\s*=\s*"([^"]*)"/i);
+    found.set(m[1], content ? content[1].trim() : '');
+  }
+  return SOCIAL_REQUIRED.filter((tag) => !found.get(tag));
+}
 
 async function walkHtml(dir) {
   const out = [];
@@ -188,7 +214,7 @@ async function main() {
   const urls = pageFiles.map(toUrlPath).filter((u) => !u.startsWith('/admin/'));
   urls.push(...await blogUrls(BASE));
   const pages = urls.map(urlPath => ({ urlPath })).sort((a, b) => a.urlPath.localeCompare(b.urlPath));
-  let pagesOk = 0, pagesFail = 0;
+  let pagesOk = 0, pagesFail = 0, socialOk = 0, socialFail = 0;
   const refsByPage = new Map(); // page.urlPath -> raw refs[]
 
   await pool(pages, async (page) => {
@@ -203,7 +229,15 @@ async function main() {
     if (res.redirected) { pagesFail++; brokenPages.push(`${page.urlPath} -> unexpectedly redirected to ${res.url}`); return; }
     pagesOk++;
     const ctype = (res.headers.get('content-type') || '').split(';')[0].trim();
-    if (ctype === 'text/html') refsByPage.set(page.urlPath, extractRefs(await res.text()));
+    if (ctype !== 'text/html') return;
+    const html = await res.text();
+    refsByPage.set(page.urlPath, extractRefs(html));
+    if (NO_SOCIAL_META.has(page.urlPath)) return;
+    const missing = missingSocialMeta(html);
+    if (missing.length) {
+      socialFail++;
+      brokenPages.push(`${page.urlPath} -> social meta empty/absent: ${missing.join(', ')}`);
+    } else socialOk++;
   });
 
   // --- Resolve + de-dupe every same-site reference across all pages, check each exactly once ---
@@ -285,6 +319,7 @@ async function main() {
   console.log(`Admin:     ${adminOk ? 'auth guard ok' : 'FAIL'}`);
   console.log(`Files:     ${filesOk} ok, ${filesFail} fail (of ${fileNames.length} in site/files/)`);
   console.log(`Refs:      ${refsOk} ok, ${refsFail} fail, ${externalCount} external (allowlisted, not fetched)`);
+  console.log(`Social:    ${socialOk} ok, ${socialFail} fail (og:/twitter: tags populated)`);
 
   if (brokenPages.length) {
     console.log(`\nBROKEN PAGES/CHECKS (${brokenPages.length}):`);
@@ -298,9 +333,16 @@ async function main() {
     }
   }
 
-  const clean = pagesFail === 0 && redirectsFail === 0 && notFoundOk && adminOk && filesFail === 0 && brokenRefs.size === 0;
+  const clean = pagesFail === 0 && redirectsFail === 0 && notFoundOk && adminOk
+    && filesFail === 0 && socialFail === 0 && brokenRefs.size === 0;
   console.log(clean ? '\nAll checks passed.' : '\nFAILED — see above.');
   process.exitCode = clean ? 0 : 1;
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+// Importable so the metadata check can be exercised against files on disk before a
+// deploy exists; the crawl itself only runs when this file is invoked directly.
+export { missingSocialMeta, SOCIAL_REQUIRED };
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(e => { console.error(e); process.exit(1); });
+}

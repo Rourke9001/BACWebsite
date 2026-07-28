@@ -10,7 +10,9 @@
 |------------|---------|
 | `site/`    | The static site — deploy artifact for Azure SWA (`app_location`), preserving the old URL structure (`/about/`, `/services/*.html`, `/video-hub/`, `/files/`). `/blog/*` does not live here — those routes are rewritten to the Function and served from Blob Storage. `staticwebapp.config.json` lives here too. |
 | `api/`     | Azure Functions (`api_location`): the contact/service form handler (honeypot + rate limiting, sends via Microsoft 365) and the dynamic blog — public rendering of `/blog/*` from the `blog` Blob Storage container plus the role-guarded admin API (`/api/blog-admin/*`) behind the `/admin/` UI. |
-| `scripts/` | `verify-site.mjs` — crawls a deployed environment and checks every page, link, redirect, and download. |
+| `partials/` | The shared site chrome — header, nav, footer, `<head>` links, GTM. Expanded into every page by `scripts/build-chrome.mjs`. **Edit here, not in the pages.** |
+| `data/`    | `site.json` — values repeated across the chrome (phone, WhatsApp, GTM id, logo paths, socials, `og:locale`/`og:site_name`). **Edit here, not in the partials.** |
+| `scripts/` | `build-chrome.mjs` (expands the chrome), `verify-site.mjs` (crawls a deployed environment), `backup-blog.mjs` (pulls the blog container), plus two Pillow-based image tools — see [scripts/README.md](scripts/README.md). |
 | `docs/`    | Runbooks: blog author guide, shared-header duplication. |
 | `archive/` | **Git-ignored, never committed.** Local copy of the previous site's backup (source + SQL dump). Contains credentials and form-submission PII. The authoritative backup lives outside this folder. |
 
@@ -50,6 +52,34 @@ swa start site --api-location api
 Don't open the HTML files directly from disk (`file://`) — links are root-relative
 (`/about/`, `/inc/css/...`) and only resolve through a web server.
 
+## Changing the header, footer, or a contact detail
+
+These live in **one place** and are expanded into all 39 chrome-bearing files
+(37 static pages + the 2 blog templates, which between them render 135 public URLs):
+
+```powershell
+# A value — phone, WhatsApp, GTM id, logo path, a social link:
+#   edit data/site.json
+# Structure — nav items, footer columns, header markup:
+#   edit the relevant file in partials/
+
+npm run build:chrome     # rewrites the 39 files in place
+git diff                 # review the real diff, then commit it
+```
+
+**Never hand-edit markup between `<!-- @chrome:… -->` and `<!-- @end:… -->`** — the next
+build overwrites it, and CI fails the PR before that can surprise anyone.
+
+The generated output is committed on purpose. It keeps `python -m http.server` a faithful
+preview (the files on disk are the real files), keeps SWA deploying `site/` with no build
+step in the deploy path, and makes every chrome change a reviewable diff. The cost —
+generated files in git — is paid for by `npm run check:chrome`, which CI runs on every PR
+and which fails if any file disagrees with `partials/` + `data/site.json`.
+
+Values are `${name}` in the partials, resolved from `data/site.json`. That syntax is
+deliberately *not* `{{name}}`: the blog templates are also chrome targets, and `{{…}}`
+belongs to `render.js`'s request-time substitution. An unknown or unused key is a build error.
+
 ## Branching & deploys
 
 - **`develop`** is the working branch (GitHub default) — commit day-to-day work here.
@@ -86,6 +116,21 @@ az staticwebapp users invite -n baclogistics -g rg-baclogistics-web `
 Invitees don't need to be in the BAC tenant — any Microsoft account matching the
 invited email works.
 
+### Where blog images live
+
+All of them are in the `blog` container under `uploads/`, served at `/blog/media/<file>`
+with `public, max-age=31536000, immutable`. Uploading through `/admin/` puts them there
+and timestamps the filename, so a re-upload always gets a new URL and never goes stale.
+
+The 87 images belonging to the 90 migrated posts moved there in Stage 6a
+(`scripts/migrate-blog-images.py`), re-encoded to WebP — 80.3 MB → 11.5 MB. **Their post
+JSON was deliberately not rewritten**: all 90 still store the original
+`/couch/uploads/…` path, and `render.js`'s `mediaUrl()` maps it to `/blog/media/` at
+render time. That kept live data untouched and makes the whole migration a `git revert`.
+The consequence to know about: **the stored value is not the served URL for those 90
+posts.** Editing a post's featured image through `/admin/` replaces the stored value with
+a real `/blog/media/…` URL, which then passes through the map unchanged.
+
 ## Operations
 
 ### Domain & DNS (domains.co.za, BAC's account)
@@ -100,6 +145,91 @@ invited email works.
 Nameservers stay on domains.co.za (`ns1-4.dns-ns.host/.zone`). Lesson from the 2026-07
 account transfer: registrar processes can silently rebuild the zone — export the zone
 before any registrar-side change, and re-verify these records after.
+
+### Blog content backup
+
+**The blog posts are the only data in this system that is not in git.** `site/` is
+versioned; the post JSONs in `bacblogcontent/blog/posts/` are not. Everything below was
+read from Azure on 2026-07-27.
+
+```powershell
+node scripts/backup-blog.mjs          # → backups/blog-<timestamp>/ (git-ignored)
+```
+
+It pulls every blob in the container, writes a `manifest.json` with a SHA-256 per blob,
+and re-hashes what it wrote before reporting success. `backups/` is git-ignored on
+purpose — it's a copy of live production data. **Keep at least one copy somewhere other
+than this machine**; a backup that only exists next to the thing it protects isn't one.
+
+Run it before any bulk change to post data, and on a routine you'll actually keep.
+
+#### What protects this data today, and what doesn't
+
+| | Setting | Effect |
+|---|---|---|
+| ✅ | `isVersioningEnabled: true` | An overwrite keeps the prior version. |
+| ✅ | `deleteRetentionPolicy: enabled, days: 30` | A deleted blob is recoverable for 30 days. |
+| ❌ | `containerDeleteRetentionPolicy: null` | **Deleting the container is not recoverable.** |
+| ❌ | `restorePolicy: null` | No point-in-time restore. |
+| ❌ | `sku: Standard_LRS` | Three copies, all in one West Europe datacenter. No zone or geo redundancy. |
+
+The first two are why `/admin/`'s delete prompt can promise recovery at all. They are
+storage-account configuration, not application behaviour — **nothing in the code
+guarantees them and anyone with portal access can switch them off.** If you change them,
+change the wording in `site/admin/admin.js` to match.
+
+#### Recommended, not yet done
+
+Switch the account from `Standard_LRS` to `Standard_GRS` (geo-redundant, replicates to a
+paired region). At 0.94 MB the cost difference is negligible. **This is an Azure change —
+it needs your approval and is not applied:**
+
+```powershell
+az storage account update -n bacblogcontent -g rg-baclogistics-web --sku Standard_GRS
+```
+
+### Static asset caching — and how to force a re-download
+
+`site/staticwebapp.config.json` sets long cache lifetimes on assets. Verified on staging
+that route `headers` do override the SWA platform default (`public, must-revalidate,
+max-age=30`), which applies to everything without a matching route:
+
+| Route | `Cache-Control` |
+|---|---|
+| `/couch/*` (`/media/*` after Stage 6b) | `public, max-age=31536000, immutable` |
+| `/inc/font-awesome/*` | `public, max-age=31536000, immutable` |
+| `/inc/css/main.css`, `/inc/js/main.js` | `public, max-age=300` |
+| everything else, incl. HTML | platform default, `max-age=30` |
+
+HTML deliberately stays on the short default so content changes appear immediately.
+
+**A cache header never deletes anything.** A one-year `max-age` means a browser may reuse
+its downloaded copy for a year without re-checking; the file stays on the server
+indefinitely. The only consequence is staleness: replace an image with a *different*
+picture under the *same* filename and returning visitors may keep seeing the old one.
+
+**Nothing can reach a browser that has already cached a response.** There is no purge, no
+invalidation signal, and clearing the Azure edge cache does not touch a visitor's browser.
+The only mechanism that works is **changing the URL**, because a different URL is a
+different cache entry.
+
+So if you ever need to replace a static image in place, change the *reference*, not the
+file — a query string is enough, and the route still matches so the header still applies
+(verified on staging):
+
+```html
+<!-- was -->
+<img src="/couch/uploads/image/home/bac-header1.webp">
+<!-- force everyone to re-download, same file on disk -->
+<img src="/couch/uploads/image/home/bac-header1.webp?v=2">
+```
+
+Bump `v` again for the next change. For the logo, which lives in the shared chrome, edit
+`data/site.json` and run `npm run build:chrome`.
+
+This does not arise for blog images: `/admin/` stamps every upload with a timestamp
+(`admin-blog.js:63` → `<base>-<Date.now()>.<ext>`), so a re-upload always produces a new
+filename and a browser can never hold a stale copy of it.
 
 ### Contact form
 

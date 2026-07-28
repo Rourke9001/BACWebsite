@@ -1,0 +1,19 @@
+{
+  "_comment": "Single source for values repeated across the site chrome. Edit here, run `npm run build:chrome` (or `node scripts/build-chrome.mjs`), commit the diff. Referenced from partials/*.html as ${name}. An unknown or unused key is a build error.",
+
+  "phone_tel": "0119747472",
+  "whatsapp": "+27113531111",
+
+  "gtm_id": "GTM-MPPHRHH",
+
+  "og_locale": "en_ZA",
+  "og_site_name": "BAC Logistics",
+
+  "logo_header": "/couch/uploads/image/header/bac-all_hdlogo2.png",
+  "logo_footer": "/couch/uploads/image/header/bac-all_hdlogo.png",
+
+  "social_facebook": "https://www.facebook.com/www.baclogistics.co.za",
+  "social_youtube": "https://www.youtube.com/@BACLogistics",
+  "social_instagram": "https://www.instagram.com/baclogistics/",
+  "social_linkedin": "https://www.linkedin.com/company/broughton-amiss-consulting/"
+}

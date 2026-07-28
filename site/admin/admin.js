@@ -28,6 +28,16 @@ function postUrl(post) {
   return post.folder ? `/blog/${post.folder}/${post.name}.html` : `/blog/${post.name}.html`;
 }
 
+// Mirrors render.js's mediaUrl(). The 90 migrated posts still store their pre-Stage-6a
+// /couch/uploads/ paths, and those files no longer exist in the deployed site, so the
+// preview has to resolve them the same way the rendered page does. DISPLAY ONLY — the
+// form field keeps the stored value, so saving a post never rewrites it.
+function previewUrl(value) {
+  const m = /^\/couch\/uploads\/(?:[^/]+\/)*([A-Za-z0-9][A-Za-z0-9._-]*)\.(?:png|jpe?g|gif|webp)$/i
+    .exec(String(value || '').trim());
+  return m ? `/blog/media/${m[1]}.webp` : value;
+}
+
 function showBanner(msg, url) {
   $('#adm-banner-msg').textContent = msg;
   const link = $('#adm-banner-link');
@@ -90,7 +100,7 @@ async function showEditor(slug) {
     form.elements.tags.value = (p.tags || []).join(', ');
     form.elements.unpublished.checked = Boolean(p.unpublished);
     $('#adm-editor').innerHTML = p.body || '';
-    if (p.featured_image) { $('#adm-featured-preview').src = p.featured_image; $('#adm-featured-preview').hidden = false; }
+    if (p.featured_image) { $('#adm-featured-preview').src = previewUrl(p.featured_image); $('#adm-featured-preview').hidden = false; }
     state.savedPost = p;
   } else {
     form.elements.date.value = new Date().toISOString().slice(0, 10);
@@ -317,7 +327,10 @@ $('#adm-featured-file').addEventListener('change', async (e) => {
 });
 $('#adm-delete').addEventListener('click', async () => {
   if (!state.editingSlug) return;
-  if (!confirm('Delete this post? (Old versions are kept in storage for rollback.)')) return;
+  // The recovery promise below is true only because the storage account has blob soft
+  // delete (30 days) and versioning enabled — no code here guarantees it. If those
+  // settings change, change this wording. See README.md → Blog content backup.
+  if (!confirm('Delete this post? (Recoverable from storage for 30 days.)')) return;
   try {
     await api(`/api/blog-admin/posts/${state.editingSlug}`, { method: 'DELETE' });
     showList();
