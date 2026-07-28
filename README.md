@@ -12,7 +12,7 @@
 | `api/`     | Azure Functions (`api_location`): the contact/service form handler (honeypot + rate limiting, sends via Microsoft 365) and the dynamic blog — public rendering of `/blog/*` from the `blog` Blob Storage container plus the role-guarded admin API (`/api/blog-admin/*`) behind the `/admin/` UI. |
 | `partials/` | The shared site chrome — header, nav, footer, `<head>` links, GTM. Expanded into every page by `scripts/build-chrome.mjs`. **Edit here, not in the pages.** |
 | `data/`    | `site.json` — values repeated across the chrome (phone, WhatsApp, GTM id, logo paths, socials, `og:locale`/`og:site_name`). **Edit here, not in the partials.** |
-| `scripts/` | `build-chrome.mjs` (expands the chrome), `verify-site.mjs` (crawls a deployed environment), `backup-blog.mjs` (pulls the blog container). |
+| `scripts/` | `build-chrome.mjs` (expands the chrome), `verify-site.mjs` (crawls a deployed environment), `backup-blog.mjs` (pulls the blog container), plus two Pillow-based image tools — see [scripts/README.md](scripts/README.md). |
 | `docs/`    | Runbooks: blog author guide, shared-header duplication. |
 | `archive/` | **Git-ignored, never committed.** Local copy of the previous site's backup (source + SQL dump). Contains credentials and form-submission PII. The authoritative backup lives outside this folder. |
 
@@ -115,6 +115,21 @@ az staticwebapp users invite -n baclogistics -g rg-baclogistics-web `
 
 Invitees don't need to be in the BAC tenant — any Microsoft account matching the
 invited email works.
+
+### Where blog images live
+
+All of them are in the `blog` container under `uploads/`, served at `/blog/media/<file>`
+with `public, max-age=31536000, immutable`. Uploading through `/admin/` puts them there
+and timestamps the filename, so a re-upload always gets a new URL and never goes stale.
+
+The 87 images belonging to the 90 migrated posts moved there in Stage 6a
+(`scripts/migrate-blog-images.py`), re-encoded to WebP — 80.3 MB → 11.5 MB. **Their post
+JSON was deliberately not rewritten**: all 90 still store the original
+`/couch/uploads/…` path, and `render.js`'s `mediaUrl()` maps it to `/blog/media/` at
+render time. That kept live data untouched and makes the whole migration a `git revert`.
+The consequence to know about: **the stored value is not the served URL for those 90
+posts.** Editing a post's featured image through `/admin/` replaces the stored value with
+a real `/blog/media/…` URL, which then passes through the map unchanged.
 
 ## Operations
 

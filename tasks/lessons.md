@@ -26,7 +26,7 @@ cheap to fix while unpushed and permanent afterwards.
 
 ## Detecting line endings: `grep -c $'\r$'` lies — use `xxd`
 
-This repo's files are **LF**, including `site/`. A check of the form
+A check of the form
 
 ```bash
 crlf=$(grep -c $'\r$' "$f"); total=$(wc -l < "$f")   # WRONG
@@ -143,6 +143,25 @@ before.size == after.size and before.mode == after.mode
 The general form: when you verify a transformation, check the *interpretation* metadata as
 well as the payload. A byte-for-byte payload match is a weaker claim than it appears.
 
+**The same trap has a second door, and Stage 4 walked through it.** `Image.save()` does
+**not** write `icc_profile` unless you pass it explicitly — so a *re-encode* drops the
+profile even though the careful *strip* path above was fixed to preserve it. Stage 4's 23
+WebP outputs carry zero profiles and 20 of their 23 sources had one. Nobody noticed,
+because the strip path had a test and the encode path had none.
+
+It turned out harmless, but only for a reason that had to be **measured, not assumed**:
+every ICC profile in this repo is plain `sRGB IEC61966-2.1`, which is exactly what a
+browser assumes for an untagged image. Check before you either panic or shrug:
+
+```python
+ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(io.BytesIO(profile)))
+```
+
+And note *why* this needs a guard rather than a check: a lossy re-encode changes every
+sample, so the `tobytes()` comparison that protects the lossless path cannot be applied at
+all. When you can't verify the output, constrain the input — both image scripts now refuse
+any non-sRGB profile instead of silently dropping it.
+
 ## Derive file sets by reference source, not by directory or basename
 
 `site/couch/uploads/` holds two intermixed sets — 69 images referenced by repo HTML and 87
@@ -221,9 +240,18 @@ minute — and decide redirect-or-404 deliberately rather than by omission.
 Every handoff in this repo has described `site/**`, `partials/**`, `data/**` and
 `api/src/blog-templates/**` as "LF-pinned". That is a paraphrase, and it is wrong in a
 way that bites. `-text` disables EOL conversion — it preserves whatever bytes are
-committed. Most files under those paths happen to be LF, but
-`site/staticwebapp.config.json` is committed **CRLF with no trailing newline**, and the
-pin faithfully preserves that.
+committed. Most files under those paths happen to be LF, but four are not. Measured
+2026-07-28 across all 47 tracked text files under `site/`; 43 are LF and these are not:
+
+| File | Endings | Trailing newline |
+|---|---|---|
+| `site/staticwebapp.config.json` | 118 CRLF, 0 bare LF | **no** |
+| `site/sitemap-static.xml` | 209 CRLF + **1 bare LF** (the blank line before `</urlset>`) | **no** |
+| `site/admin/admin.js` | 344 CRLF | yes |
+| `site/admin/index.html` | 146 CRLF | yes |
+
+So it is not one exceptional file: `sitemap-static.xml` is *mixed*, and a generator that
+writes uniform CRLF into it changes a byte just as surely as one that writes uniform LF.
 
 A generator that asserts `b'\r' not in raw` therefore refuses to touch a perfectly
 healthy file, and — worse — a generator that "normalises to LF" rewrites all 118 lines,
@@ -245,6 +273,37 @@ if serialise(json.loads(raw)) != raw:
 
 That round-trip check is what caught the missing trailing newline here — a 2-byte
 difference that no line-level diff would have shown.
+
+One more trap, met while re-deriving the table above: **a byte count is only as good as
+the pipeline computing it.** Counting `0d` bytes across `git ls-files site/` flags **87
+files** — because a `0d` inside a PNG or a `.woff2` is data, not a line ending. Filtering
+to text files and then counting CRLF with `od | tr | paste | grep -o '0d 0a'` *still*
+under-reported. Both answers looked authoritative. Filter to text files and count on the
+raw buffer, never through a shell pipeline:
+
+```python
+d = open(f, 'rb').read()
+d.count(b'\r\n'), d.count(b'\n') - d.count(b'\r\n'), d.endswith(b'\n')
+```
+
+## Assert the end state you want, not the transformation you happen to be doing
+
+Stage 6a's encoder asserted "every WebP must be smaller than its source" and refused to
+write anything. Five of the 87 were genuinely larger. The assertion was wrong, not the
+encode: those five sources are already compressed to ~1 bpp, so WebP q90 spends more bytes
+faithfully preserving artifacts they already had. Re-encoding them lower to satisfy the
+rule would have stacked a second round of generation loss onto lossy inputs to save 157 KB,
+on a payload that shrinks by 69 MB — and broken the uniform `.webp` namespace that lets
+`render.js` map paths with one rule instead of a lookup table.
+
+"Every file must shrink" is a claim about *my* transformation. The claim actually worth
+guarding is about the result: the payload as a whole must shrink dramatically, and no
+single file may blow up. Two bounds instead of one rule, plus a report line naming every
+file that grew — so the outcome stays visible rather than quietly tolerated.
+
+The tell: when an assertion fires, ask whether it caught a bug in the work or encoded an
+assumption about the work. Relaxing it is right exactly when the end state is still the one
+you wanted — and then it should be *replaced*, not deleted.
 
 ## CSS: an author `display` rule silently defeats the `hidden` attribute
 

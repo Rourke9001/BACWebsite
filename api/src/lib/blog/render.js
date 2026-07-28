@@ -6,8 +6,9 @@ const path = require('node:path');
 const ORIGIN = 'https://baclogistics.co.za';
 const POSTS_PER_PAGE = 12;
 // Share image for a post that has neither og_image nor featured_image. Same image the
-// static pages fall back to; it lives in the repo, so Stage 6b's /couch/ -> /media/
-// sweep must catch this line too.
+// static pages fall back to; it is a STATIC repo asset in the 69-file set, not a blog
+// image, so it is deliberately never passed through mediaUrl() below — it still lives at
+// /couch/ and Stage 6b's /couch/ -> /media/ sweep must catch this line.
 const DEFAULT_OG_IMAGE = '/couch/uploads/image/home/bac-header1.webp';
 const TPL_DIR = path.join(__dirname, '..', '..', 'blog-templates');
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
@@ -29,6 +30,34 @@ function fill(template, values) {
 }
 
 /**
+ * Stage 6a moved every blog image into Blob Storage under `uploads/`, served at
+ * `/blog/media/<file>` (handler.js:35-45). The 90 stored posts still carry their
+ * pre-migration `/couch/uploads/` paths and are deliberately NOT rewritten — mapping at
+ * render time leaves live data untouched and makes the whole change a `git revert`.
+ *
+ * All 87 were re-encoded to WebP on upload, and two invariants make this one rule rather
+ * than a lookup table: every basename is unique, and none collides once the extension is
+ * swapped. Both are asserted on every run of scripts/migrate-blog-images.py.
+ *
+ * Everything else is returned untouched — in particular an author-supplied absolute URL,
+ * and any `/blog/media/` value already written by the admin upload (admin-blog.js:65),
+ * whose extension must survive because those blobs are stored exactly as uploaded.
+ */
+const COUCH_IMAGE =
+  /^\/couch\/uploads\/(?:[^/]+\/)*([A-Za-z0-9][A-Za-z0-9._-]*)\.(?:png|jpe?g|gif|webp)$/i;
+
+function mediaUrl(value) {
+  const v = String(value == null ? '' : value).trim();
+  const m = COUCH_IMAGE.exec(v);
+  return m ? `/blog/media/${m[1]}.webp` : v;
+}
+
+// Six posts also name their image inside a json_ld string, where the path is embedded in
+// JSON rather than being the whole field — so the anchored test above cannot be applied
+// to the field as a whole. Post bodies carry no such references (verified across all 90).
+const EMBEDDED_COUCH_IMAGE = /\/couch\/uploads\/[A-Za-z0-9._/-]+/g;
+
+/**
  * og:image must be an absolute URL — relative values are unreliable across scrapers and
  * several ignore them outright. Stored values are root-relative (`/couch/uploads/...`),
  * but /admin/ accepts a free-text og_image, so an author-supplied absolute URL has to
@@ -47,7 +76,7 @@ function absoluteUrl(value) {
  * coalescing every post renders an empty og:image. Explicit og_image still wins.
  */
 function shareImage(post) {
-  return absoluteUrl(post.og_image || post.featured_image || DEFAULT_OG_IMAGE);
+  return absoluteUrl(mediaUrl(post.og_image) || mediaUrl(post.featured_image) || DEFAULT_OG_IMAGE);
 }
 
 function formatDate(iso) {
@@ -78,7 +107,7 @@ function renderArticleSection(post) {
     : '';
   const imageHtml = post.featured_image
     ? `<div class="gl-blog-article-image">
-                <img src="${esc(post.featured_image)}" alt="${esc(post.featured_image_alt)}" />
+                <img src="${esc(mediaUrl(post.featured_image))}" alt="${esc(post.featured_image_alt)}" />
             </div>`
     : '';
   const videoHtml = post.youtube_id
@@ -123,7 +152,10 @@ function renderPost(post) {
     canonical: esc(canonical),
     og_image: esc(shareImage(post)),
     robots_meta: post.robots ? `<meta name="robots" content="${esc(post.robots)}" />` : '',
-    json_ld: post.json_ld ? `<script type="application/ld+json">\n${post.json_ld.replace(/<\//g, '<\\/')}\n</script>` : '',
+    json_ld: post.json_ld
+      ? `<script type="application/ld+json">\n${post.json_ld
+        .replace(EMBEDDED_COUCH_IMAGE, mediaUrl).replace(/<\//g, '<\\/')}\n</script>`
+      : '',
     article_section: renderArticleSection(post),
   });
 }
@@ -132,7 +164,7 @@ function renderCard(post) {
   const author = post.author ? `<span>${esc(post.author)}</span>                                    ` : '';
   const imageHtml = post.featured_image
     ? `<div class="gl-blog-card-image">
-            <img src="${esc(post.featured_image)}" alt="${esc(post.featured_image_alt)}" />
+            <img src="${esc(mediaUrl(post.featured_image))}" alt="${esc(post.featured_image_alt)}" />
         </div>`
     : '';
   return `<article class="gl-blog-card">
