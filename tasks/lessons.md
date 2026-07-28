@@ -24,6 +24,64 @@ MSG
 Then check with `git log -1 --format='%s'` before pushing. A malformed subject is
 cheap to fix while unpushed and permanent afterwards.
 
+## `git grep '/pattern'` silently matches nothing on Windows
+
+Measuring Stage 6b's blast radius, this returned nothing at all:
+
+```bash
+git grep -l '/couch/uploads/'     # 0 files, exit 1 — and there are 61
+```
+
+Git Bash is MSYS2, which rewrites arguments that look like POSIX paths into Windows paths
+before `git.exe` sees them. A leading `/` is enough to trigger it, so git searches for a
+mangled pattern like `C:/Program Files/Git/couch/uploads/`. **Exit 1 and no output is
+exactly what a genuine "no matches" looks like** — there is no error, no warning, and the
+answer is plausible if you half-expect the references to be gone already.
+
+Drop the leading slash, or suppress the conversion explicitly:
+
+```bash
+MSYS2_ARG_CONV_EXCL='*' git grep -l '/couch/uploads/'   # 61 files
+```
+
+`grep -r` is unaffected — it is not an MSYS-aware binary receiving the pattern as a path —
+so `grep -r` finding 351 while `git grep` finds 0 is this bug, not a `.gitignore` subtlety.
+
+The general form: on Windows, a tool that reports **zero** is making a claim you should
+confirm the same way you would confirm a surprising non-zero one. For a stage that is
+entirely a reference sweep, this was the difference between 310 references and none.
+
+## Compare line endings against the committed blob, not the working copy
+
+The `-text` lesson below says to read the bytes of the specific file and reproduce them.
+Stage 6b did exactly that and still flipped 54 line endings, because it read the bytes
+from the *working copy*:
+
+```python
+if (b'\r\n' in raw) != (b'\r\n' in new_raw):   # cannot fail — both come from disk
+```
+
+`api/src/blog-templates/error.html` was already CRLF on disk while its blob is LF — a
+checkout that predates the `.gitattributes` pin, which converts on checkout but never
+re-normalises a file already sitting in the tree. Read-modify-write then rewrites every
+line, and because that path is pinned `-text`, **git records the flip faithfully rather
+than normalising it away.** The pin means "trust the working copy bytes", so a stale
+working copy is a hazard the pin *preserves* rather than one it protects you from.
+
+The tell is that it hides among false alarms: seven other files showed CRLF working copies
+too, and every one was harmless because they are unpinned and git normalised them to LF on
+`git add`. Only the pinned file's change was real. So `git status`/`git diff` on the
+worktree cannot answer this — inspect what is actually staged:
+
+```bash
+git show ":$f" | ...   # the blob being committed
+git show "HEAD:$f"     # the blob it replaces
+```
+
+Assert `new_raw` against `git show HEAD:<file>`, and check the arithmetic per file: a
+one-reference edit that reports `1 insertion(+), 1 deletion(-)` is right; the same edit
+reporting 94 changed lines is the whole file being rewritten.
+
 ## Detecting line endings: `grep -c $'\r$'` lies — use `xxd`
 
 A check of the form
