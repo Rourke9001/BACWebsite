@@ -9,7 +9,7 @@ const POSTS_PER_PAGE = 12;
 // static pages fall back to; it is a STATIC repo asset in the 69-file set, not a blog
 // image, so it is deliberately never passed through mediaUrl() below — it still lives at
 // /couch/ and Stage 6b's /couch/ -> /media/ sweep must catch this line.
-const DEFAULT_OG_IMAGE = '/couch/uploads/image/home/bac-header1.webp';
+const DEFAULT_OG_IMAGE = '/media/home/bac-header1.webp';
 const TPL_DIR = path.join(__dirname, '..', '..', 'blog-templates');
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];

@@ -146,14 +146,19 @@ templates render with zero unresolved `${}` or `{{}}` tokens.
       Measured evidence behind the q90 choice: q75 −93.5 %, q82 −91.4 %, q90 −86.9 % across
       all 95; palette-PNG (extension stable) only −26…−75 % and *worst* on the home hero.
       Only **2** of the 95 genuinely use transparency, both blog images — WebP preserves it.
-- [ ] Stage 5 — OG/Twitter metadata, 135 URLs (PR 5) — **in progress**, branch
-      `feature/og-metadata`. Detailed plan below.
-- [ ] **HARD STOP — set up Google Search Console with the owner before Stage 6.**
-      Owner has domains.co.za access for the TXT verification record. Never touch MX, SPF,
-      DKIM or autodiscover.
-- [ ] Stage 6a — 87 blog images to Blob Storage (PR 6)
-- [ ] Stage 6b — 69 static images to `site/media/`, redirect decision (PR 7)
+- [x] Stage 5 — OG/Twitter metadata, 135 URLs — ✅ MERGED (PR #20-#22). Detailed plan below.
+- [x] **HARD STOP — set up Google Search Console with the owner before Stage 6.** Done;
+      Gate 1 above records what it measured. Never touch MX, SPF, DKIM or autodiscover.
+- [x] Stage 6a — 87 blog images to Blob Storage — ✅ MERGED (PR #25-#27). 90/90 posts
+      render, 87/87 images serve `image/webp` with `immutable`.
+- [x] Stage 6b — 69 static images to `site/media/`, `site/couch/` deleted — **this PR**.
+      Review below.
 - [ ] Stage 7 — housekeeping (PR 8)
+
+**Everything through Stage 6b is on `develop`. Stages 1–6a are LIVE IN PRODUCTION** —
+`main` and `develop` were level at `9c33299` when 6b started. Production was verified
+after the 6a deploy: 137 pages, 32 redirects, 322 refs, 136 social, 6 files, 404 + admin
+guard, all passing.
 
 ### Stage 5 plan — OG/Twitter metadata (branch `feature/og-metadata`)
 
@@ -273,6 +278,81 @@ referenced paths, of which one — `/couch/uploads/image/blog/x.png` — is the 
 `api/test/blog-render.test.js:9` and resolves to nothing. 202 reference occurrences across
 42 files. All 87 blog basenames are unique.
 
+### Stage 6b — 69 static images to `site/media/` (branch `feature/static-images-to-media`)
+
+`git mv site/couch/uploads/image site/media`; `site/couch/` deleted. It held nothing else.
+
+- [x] **69 files moved, content provably unchanged** — SHA-256 per file before and after,
+      all 69 identical; git records all 69 as renames (`R`), not delete+add.
+- [x] **310 references swept, 45 deliberately left.** The discriminator is neither the
+      directory nor the syntax: **an occurrence is rewritten iff its URL resolves to a file
+      being moved.** All 45 survivors are then excluded *by construction* rather than by a
+      skip list — 23 redirect route keys (the legacy URLs being redirected *from*), 13
+      fixtures/prose in `blog-render.test.js` standing in for what the 90 live posts still
+      store in Blob Storage, 4 regexes over stored blob values, 5 prose mentions.
+- [x] **The trap avoided:** all 23 of PR #23's redirect *targets* pointed at `/couch/…webp`
+      files this stage moved. They resolve, so they were swept; leaving them would have made
+      every one a 301 into a 404 — worse than no redirect. Route `/couch/*` → `/media/*`.
+- [x] **Redirects: all 69 added** (owner decision). The brief assumed only a Function could
+      work; that was wrong. Azure documents the limit as *"Max file size is 20 KB"* with **no
+      route-count limit**. Measured: **112 routes, 18,175 bytes, 2,305 under the ceiling** —
+      repointing the 23 *saves* 322 bytes, the 69 add 11,325. Edge-served, so no Function, no
+      cold start, and no `Cache-Control`-on-301 concern (there is no invocation to avoid).
+      The 87 blog redirects genuinely didn't fit (20,227 bytes alone) — blog slugs are ~40 %
+      longer per entry. That is why 6a 404'd and 6b doesn't.
+- [x] **New CI guard** `api/test/staticwebapp-config.test.js` (5 tests): the 20 KB ceiling,
+      every `/media/` redirect target exists on disk, nothing points into `/couch/`,
+      redirects precede the cache rule (first-match-wins), no duplicate routes.
+- [x] **The single-source payoff, first real one.** The logo is two lines in
+      `data/site.json`; `check:chrome` stayed 39/39 across the change.
+- [x] Verified: **64/64 api tests** (was 59, +5) · `check:chrome` 39/39 · all 69 distinct
+      `/media/` URLs return 200 locally · 7 key pages render with **0** `/couch/` refs and no
+      console errors · home page screenshotted, logo + hero correct.
+- [x] Diff arithmetic exact per file (`site/index.html` +20/−20, `about` +18/−18,
+      `services/index` +19/−19, …), **0 changed lines lacking `/media/`**; config +369/−24 =
+      69×5 new lines + 23 repointed targets + 1 cache route.
+- [ ] **Verify on staging after merge** — PRs into `develop` get no preview environment.
+      `node scripts/verify-site.mjs <staging-url>`, then spot-check a 301:
+      `curl -I .../couch/uploads/image/home/bac-header1.webp` → 301 to `/media/…`.
+
+### Corrections made to my own work this stage
+
+1. **The sweep's line-ending assertion compared the working copy to itself**, so it could
+   not fail. It missed `api/src/blog-templates/error.html`, already CRLF on disk while its
+   blob is LF (a checkout predating the `.gitattributes` pin). Read-modify-write flipped 54
+   line endings and — because that path is pinned `-text` — git recorded the flip faithfully
+   instead of normalising it. Caught by per-file diff arithmetic: a one-reference edit
+   reporting 94 changed lines. Now asserted against `git show HEAD:<file>`. Captured in
+   `tasks/lessons.md`; seven other files showed the same CRLF worktree symptom and were all
+   harmless, which is what made the real one easy to wave through.
+2. **`git grep '/couch/uploads/'` returned 0 files, exit 1 — and there are 61.** MSYS2
+   rewrites the leading `/` into a Windows path before `git.exe` sees it, and the result is
+   indistinguishable from "no matches". For a stage that is entirely a reference sweep this
+   was the difference between 310 references and none. Captured in `tasks/lessons.md`.
+3. **A destination-existence assertion fired 11 false positives** because `/media/…` also
+   matches inside `/blog/media/…` — Stage 6a's Blob namespace, which resolves to no repo
+   file by design. Anchored with a negative lookbehind.
+4. **`census.json` was written into the repo root** by a scratch script that `chdir`'d there.
+   Moved to the scratchpad; the tree was clean before any commit.
+
+### Corrections to the Stage 6b handoff
+
+- **`sitemap-static.xml` needed no edit** — it has zero `/couch/` references (it lists page
+  URLs, not images). Only `staticwebapp.config.json` required the byte-exact JSON handling.
+- **`site/404.html` also carries a logo reference** and is likewise a stripped shell outside
+  `check:chrome`; the handoff named only `blog-templates/error.html`. The resolution-based
+  sweep caught both without needing either to be listed.
+- **The protected fixture count in `blog-render.test.js` is 10, not 9** — line 86's
+  `` `/couch/uploads/image/${src}` `` template literal is also a `mediaUrl()` input.
+- The handoff's "310 across 45 files" reconciles: 350 in code/config = 307 sweepable + 43
+  protected; +3 live-doc refs (README ×2, DESIGN ×1) and +2 doc prose gives 310/45.
+
 ### Review
 
-_(added when the work completes)_
+**Stage 6b is complete and verified locally.** `site/couch/` is gone; the 69 static images
+live at `/media/…` with a 301 from every old URL. `site/` drops to ~5.8 MB of images.
+
+Deliberately **not** done, and left for Stage 7: the stale `README.md` counts ("38 static
+pages" → 37, "~99 blog posts" → 90, "5 downloadable docs" → 6), the apex `A` record note,
+the dormant `documents/` feature, and the `az staticwebapp appsettings list` secrets
+warning. All are housekeeping the handoff assigns to Stage 7, not 6b.
