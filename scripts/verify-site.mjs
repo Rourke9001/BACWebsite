@@ -50,6 +50,13 @@ const SOCIAL_REQUIRED = [
   'twitter:card', 'twitter:title', 'twitter:image',
 ];
 
+// The stripped shells carry no chrome and are deliberately excluded from the 39
+// chrome-bearing files, so they carry no social tags either. /404.html is not a public
+// URL anyone shares — it is reached by the 404 response override, which is probed
+// separately above. Asserting share metadata on it fails a page that is correct.
+// (/admin/* is excluded from the crawl entirely, at the urls filter below.)
+const NO_SOCIAL_META = new Set(['/404.html']);
+
 function missingSocialMeta(html) {
   const found = new Map();
   for (const m of html.matchAll(/<meta\s[^>]*\b(?:property|name)\s*=\s*"((?:og|twitter):[^"]+)"[^>]*>/gi)) {
@@ -225,6 +232,7 @@ async function main() {
     if (ctype !== 'text/html') return;
     const html = await res.text();
     refsByPage.set(page.urlPath, extractRefs(html));
+    if (NO_SOCIAL_META.has(page.urlPath)) return;
     const missing = missingSocialMeta(html);
     if (missing.length) {
       socialFail++;
