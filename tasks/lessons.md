@@ -370,3 +370,23 @@ you wanted — and then it should be *replaced*, not deleted.
 `/admin/` shipped an empty success banner on every load: `.adm-banner { display: flex }`
 made the `hidden` attribute inert. When a class sets `display` on an element that JS
 toggles via `.hidden`, pair it with an explicit `.thing[hidden] { display: none }`.
+
+## Retiring a single-sourced value: add the old value to `RETIRED` *before* regenerating
+
+Changing `whatsapp` in `data/site.json` and running `build:chrome` updates the 39 chrome
+regions and nothing else — by construction. The same contact detail sitting in page *body*
+content is invisible to a chrome expander, so the regenerate reports success and the site
+is left half-corrected, with no signal that anything was missed.
+
+Adding the outgoing value to `RETIRED` first inverts that. The run refused to write and
+named `site/information/privacy-policy.html:820` — `+27 11 353 1111` in the POPIA contact
+block, outside every chrome region. One line that would otherwise have survived a change
+whose whole point was to eliminate it.
+
+The order matters: `RETIRED` is checked against the *expanded* output, so the guard must be
+in place for the run that does the replacing. Add it afterwards and the first run writes
+the half-fix, and the second run passes cleanly against the new value.
+
+Generalises past this repo: when a build regenerates N copies from one source, the risk is
+never the N copies — it is the N+1st copy the generator doesn't own. Assert on the value
+that must disappear, not just on the value that must appear.
