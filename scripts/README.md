@@ -92,3 +92,27 @@
 
   `--auth-mode login` is denied on this account — no data-plane RBAC is assigned, so the
   CLI must fall back to the account key.
+
+- **move-static-images.py** — Stage 6b, one-shot. Swept the references after
+  `git mv site/couch/uploads/image site/media` retired the CouchCMS-inherited folder.
+  No dependencies. Kept as the record of *which* references moved and why the rest didn't.
+
+  ```
+  python scripts/move-static-images.py     # run once, after the git mv
+  ```
+
+  The repo held 355 `/couch/uploads/` strings in code, config and live docs. 310 pointed
+  at one of the 69 files being moved; **45 pointed at nothing on disk and had to survive
+  untouched** — 23 redirect *route keys* (the legacy URLs being redirected *from*), 13
+  fixtures and comments in `blog-render.test.js` that stand in for what the 90 live posts
+  still store in Blob Storage, 4 regexes matching stored blob values, and 5 prose mentions.
+
+  So the discriminator is neither the directory nor the syntax: **an occurrence is rewritten
+  if and only if its URL resolves to a file being moved.** Every one of the 45 is then
+  excluded by construction rather than by a skip list that could rot. Two cases a
+  directory rule gets wrong: `image/blog/news.webp` is a *static* asset inside a `blog/`
+  folder and moves, while the 23 redirect *targets* sit in the same file as the 23
+  protected route keys and must move — leaving them would turn each 301 into a 404.
+
+  `docs/` and `tasks/` are excluded as dated records; rewriting a URL inside a document
+  that reports what was measured on a given day would falsify it.

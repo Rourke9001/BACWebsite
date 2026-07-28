@@ -80,7 +80,7 @@ Reuse these before writing new CSS — check `main.css` for the exact class firs
   Never hand-write a new absolute internal link.
 - **Share image (`og:image`/`twitter:image`) — a page shares its own hero.** Same file as
   `#gl-hero-image` (or the slider image on the home page), absolute. A page with no imagery
-  of its own falls back to the home hero, `/couch/uploads/image/home/bac-header1.webp`; blog
+  of its own falls back to the home hero, `/media/home/bac-header1.webp`; blog
   posts fall back to `featured_image` (`render.js`). `og:image` and `twitter:image` always
   hold the same value. The site-wide constants — `og:locale`, `og:site_name`,
   `twitter:card` — are chrome (`partials/social-meta.html`), not per-page. A new page needs

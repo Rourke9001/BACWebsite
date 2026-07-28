@@ -8,11 +8,11 @@
 
 | Path       | Purpose |
 |------------|---------|
-| `site/`    | The static site — deploy artifact for Azure SWA (`app_location`), preserving the old URL structure (`/about/`, `/services/*.html`, `/video-hub/`, `/files/`). `/blog/*` does not live here — those routes are rewritten to the Function and served from Blob Storage. `staticwebapp.config.json` lives here too. |
+| `site/`    | The static site — deploy artifact for Azure SWA (`app_location`), preserving the old URL structure (`/about/`, `/services/*.html`, `/video-hub/`, `/files/`). Its 69 images live in `site/media/`, served at `/media/…`. `/blog/*` does not live here — those routes are rewritten to the Function and served from Blob Storage. `staticwebapp.config.json` lives here too. |
 | `api/`     | Azure Functions (`api_location`): the contact/service form handler (honeypot + rate limiting, sends via Microsoft 365) and the dynamic blog — public rendering of `/blog/*` from the `blog` Blob Storage container plus the role-guarded admin API (`/api/blog-admin/*`) behind the `/admin/` UI. |
 | `partials/` | The shared site chrome — header, nav, footer, `<head>` links, GTM. Expanded into every page by `scripts/build-chrome.mjs`. **Edit here, not in the pages.** |
 | `data/`    | `site.json` — values repeated across the chrome (phone, WhatsApp, GTM id, logo paths, socials, `og:locale`/`og:site_name`). **Edit here, not in the partials.** |
-| `scripts/` | `build-chrome.mjs` (expands the chrome), `verify-site.mjs` (crawls a deployed environment), `backup-blog.mjs` (pulls the blog container), plus two Pillow-based image tools — see [scripts/README.md](scripts/README.md). |
+| `scripts/` | `build-chrome.mjs` (expands the chrome), `verify-site.mjs` (crawls a deployed environment), `backup-blog.mjs` (pulls the blog container), plus the Pillow-based image tools and the one-shot `/couch/` → `/media/` migration — see [scripts/README.md](scripts/README.md). |
 | `docs/`    | Runbooks: blog author guide, shared-header duplication. |
 | `archive/` | **Git-ignored, never committed.** Local copy of the previous site's backup (source + SQL dump). Contains credentials and form-submission PII. The authoritative backup lives outside this folder. |
 
@@ -196,7 +196,7 @@ max-age=30`), which applies to everything without a matching route:
 
 | Route | `Cache-Control` |
 |---|---|
-| `/couch/*` (`/media/*` after Stage 6b) | `public, max-age=31536000, immutable` |
+| `/media/*` | `public, max-age=31536000, immutable` |
 | `/inc/font-awesome/*` | `public, max-age=31536000, immutable` |
 | `/inc/css/main.css`, `/inc/js/main.js` | `public, max-age=300` |
 | everything else, incl. HTML | platform default, `max-age=30` |
@@ -219,9 +219,9 @@ file — a query string is enough, and the route still matches so the header sti
 
 ```html
 <!-- was -->
-<img src="/couch/uploads/image/home/bac-header1.webp">
+<img src="/media/home/bac-header1.webp">
 <!-- force everyone to re-download, same file on disk -->
-<img src="/couch/uploads/image/home/bac-header1.webp?v=2">
+<img src="/media/home/bac-header1.webp?v=2">
 ```
 
 Bump `v` again for the next change. For the logo, which lives in the shared chrome, edit

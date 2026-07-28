@@ -64,7 +64,7 @@ test('og:image falls back featured_image -> site default, and is always absolute
   // /blog/media/ — nothing was uploaded under that name and it would 404.
   const bare = render.renderPost(post({ og_image: '', featured_image: '' }));
   assert.ok(bare.includes(
-    'property="og:image" content="https://baclogistics.co.za/couch/uploads/image/home/bac-header1.webp"'));
+    'property="og:image" content="https://baclogistics.co.za/media/home/bac-header1.webp"'));
 
   // Never a relative or empty value, whatever the input.
   for (const html of [inherited, explicit, external, bare]) {
@@ -136,9 +136,9 @@ test('blog index head carries populated social metadata', () => {
   assert.ok(html.includes('property="og:type" content="website"'));
   assert.ok(html.includes('property="og:locale" content="en_ZA"'));
   assert.ok(html.includes(
-    'property="og:image" content="https://baclogistics.co.za/couch/uploads/image/blog/news.webp"'));
+    'property="og:image" content="https://baclogistics.co.za/media/blog/news.webp"'));
   assert.ok(html.includes(
-    'name="twitter:image" content="https://baclogistics.co.za/couch/uploads/image/blog/news.webp"'));
+    'name="twitter:image" content="https://baclogistics.co.za/media/blog/news.webp"'));
 });
 
 test('folder posts get folder URLs', () => {
