@@ -10,15 +10,27 @@ Corrected figures come from `docs/validation-2026-07-27.md`.
 
 ### Stage 0 — gates — CLOSED
 
-- [x] **Gate 1 — `/couch/uploads/` indexing.** No Search Console access, so unmeasurable
-      today. **Deferred to Stage 6b (PR 7).** Owner has domains.co.za access and wants to
-      set the property up together before then — TXT verification record, nothing near
-      MX/SPF/DKIM. Standing recommendation: build the redirect Function. The validation
-      doc removed the reason it was thought expensive (no router change needed — all 87
-      blog basenames already match `^[A-Za-z0-9][A-Za-z0-9._-]*$`), and `documents.js:11-12`
-      already runs the `x-ms-original-url` pattern in production. A 301 transfers
-      accumulated ranking to the new URL; a 404 discards it. Skipping is a defensible
-      owner call.
+- [x] **Gate 1 — `/couch/uploads/` indexing. MEASURED 2026-07-28, not deferred.**
+      Google Images `site:baclogistics.co.za` → **≥47 distinct image URLs, 47 of 47 under
+      `/couch/uploads/`**. So the brief's fallback — "if few or none are indexed, Stage 6
+      collapses to a rename plus a sweep" — is **off the table**; the redirect question in
+      6b is live and must be decided, not skipped by default.
+
+      **Caveat that must survive to 6b:** Search Console showed Image search at 0 clicks /
+      27 impressions / avg position 38.9 — but that is **one day of data (2026-07-26)**.
+      GSC did not backfill on verification. **Re-read Performance → Search type: Image
+      before locking 6b's architecture**; more may have materialised by then.
+
+      Standing recommendation unchanged: build the redirect Function. No router change is
+      needed (all 87 blog basenames already match `^[A-Za-z0-9][A-Za-z0-9._-]*$`), and
+      `documents.js:11-12` already runs the `x-ms-original-url` pattern in production.
+      A 301 transfers accumulated ranking to the new URL; a 404 discards it.
+
+      **6b cannot use a wildcard.** SWA config cannot express a path-preserving capture —
+      `/couch/*` can only target one fixed destination. That means ~156 explicit route
+      entries or a Function. PR #23 did 23 by hand as a rehearsal; judge from that.
+      **SWA applies the FIRST matching route**, so redirects for `/couch/...` must be
+      ordered ahead of the `/couch/*` cache-header rule or they are dead entries.
 - [x] **Gate 2 — existing blog backup?** **No.** Answered from evidence, not recollection:
       - `archive/` + the WeTransfer zip are the *pre-migration CouchCMS* site (SQL + PHP).
         An ancestor of the content, not a copy of it.
@@ -137,12 +149,12 @@ templates render with zero unresolved `${}` or `{{}}` tokens.
       Measured evidence behind the q90 choice: q75 −93.5 %, q82 −91.4 %, q90 −86.9 % across
       all 95; palette-PNG (extension stable) only −26…−75 % and *worst* on the home hero.
       Only **2** of the 95 genuinely use transparency, both blog images — WebP preserves it.
-- [ ] Stage 5 — OG/Twitter metadata, 135 URLs (PR 5) — **in progress**, branch
-      `feature/og-metadata`. Detailed plan below.
-- [ ] **HARD STOP — set up Google Search Console with the owner before Stage 6.**
-      Owner has domains.co.za access for the TXT verification record. Never touch MX, SPF,
-      DKIM or autodiscover.
-- [ ] Stage 6a — 87 blog images to Blob Storage (PR 6)
+- [x] Stage 5 — OG/Twitter metadata, 135 URLs — ✅ MERGED (PR #21), plus the video-hub
+      descriptions follow-up (PR #22). Detailed plan below.
+- [x] **HARD STOP — Google Search Console.** ✅ Done 2026-07-28. Domain property, DNS TXT,
+      auto-verified; sitemap re-submitted the same day. MX/SPF/DKIM untouched.
+- [ ] Stage 6a — 87 blog images to Blob Storage (PR 6) — **in progress**, branch
+      `feature/blog-images-to-blob`. Detailed plan below.
 - [ ] Stage 6b — 69 static images to `site/media/`, redirect decision (PR 7)
 - [ ] Stage 7 — housekeeping (PR 8)
 
@@ -238,6 +250,79 @@ source**, not directory: 69 static (referenced by repo HTML) + 87 blog (referenc
 referenced paths, of which one — `/couch/uploads/image/blog/x.png` — is the test fixture at
 `api/test/blog-render.test.js:9` and resolves to nothing. 202 reference occurrences across
 42 files. All 87 blog basenames are unique.
+
+### Stage 6a plan — 87 blog images to Blob Storage (branch `feature/blog-images-to-blob`)
+
+**Re-derived from the verified backup 2026-07-28, not carried over from a brief.**
+90 `featured_image` + 6 `json_ld` refs → **87 distinct paths**, 0 on-disk misses, 76.5 MB,
+**76 over 300 KB** (75.0 MB — the brief's "72 / 74.3 MB" is superseded), 0 duplicate
+basenames, **0 stem collisions after the `.webp` swap**, 0 router-regex failures before or
+after. The 6 `json_ld` paths are **already in the `featured_image` set** — they add no new
+files, only a second place to rewrite. 3 images are shared by 2 posts each. They live in
+two directories (`image/` 61, `image/blog/` 26); `image/blog/` also holds one *static*
+image (`news.webp`), so **directory is not the discriminator — reference source is.**
+
+Because basenames are unique and stems don't collide, the flat `uploads/` namespace is
+safe and the render map is **one rule, no lookup table**.
+
+**No new mechanism is needed — the target already exists and is live in production:**
+`store.js:4,51,55` (layout + `uploadImage`), `handler.js:35-45` (serves `/blog/media/<f>`
+with `max-age=31536000, immutable`), `router.js:13` (flat namespace, no subdirectories),
+`admin-blog.js:64-65` (the admin upload already returns `/blog/media/<name>`).
+
+Owner decisions 2026-07-28: **go straight through** (no pre-upload crop review — q90 was
+approved in Stage 4 on the same photography; crops go in the PR for the record), and
+**blob upload authorised**.
+
+- [x] **Encoder ICC guard — the thing that nearly repeated silently.** 39 of the 87 carry
+      an ICC profile, and `reencode-images.py`'s `encode_webp()` never passed
+      `icc_profile` through. Measured what that already cost: Stage 4's 23 WebP outputs
+      carry **0** profiles and **20 of their 23 sources had one**. Then identified them
+      before calling it a defect — **every profile in both sets is plain
+      `sRGB IEC61966-2.1`**, which is exactly what a browser assumes for an untagged
+      image. So Stage 4 was perceptually a no-op and 6a would be too. Drop remains the
+      right call (smaller files, no behaviour change), but it must stop being *silent*:
+      **refuse to encode any image whose profile is not sRGB.** Add the guard to the new
+      script and back-port it to `reencode-images.py` (no output change — nothing
+      oversized remains there).
+- [x] **`scripts/migrate-blog-images.py`** — `--check` reports and writes nothing;
+      validate-all-then-write per `tasks/lessons.md`. Derives the 87 from post JSON by
+      reference source. Encodes **all 87** to WebP q90, not just the 76 oversized —
+      uniform `.webp` keeps the render map one rule instead of a conditional. Asserts per
+      file: dimensions preserved, mode/alpha preserved (2 images have real transparency),
+      ICC sRGB-or-refuse, output smaller, no stem collision, basename still matches the
+      router regex.
+- [x] **Upload** the 87 to `bacblogcontent` / `blog` / `uploads/` with correct
+      `image/webp` content type. Adds only new objects — nothing existing is modified or
+      deleted, no post JSON is touched. `--auth-mode login` is denied on this account (no
+      data-plane RBAC); key auth works.
+- [x] **Verify against production before any code change lands.** `/blog/media/*` is
+      already served in production, so all 87 can be proven live *before* the repo
+      deletion is committed. Assert 200, `Content-Type: image/webp`, byte length matches
+      the local encode, and the immutable cache header, on all 87.
+- [x] **`render.js` — map at render time. Do NOT rewrite the 90 post JSONs.** One helper
+      maps a leading `/couch/uploads/…/<file>.<ext>` to `/blog/media/<stem>.webp` and
+      returns everything else untouched. Applied to `post.featured_image` (`:81`, `:135`),
+      to `post.og_image`/`post.featured_image` **inside** `shareImage` (`:50`), and to
+      `post.json_ld` (`:126`). **Deliberately NOT applied to `DEFAULT_OG_IMAGE`
+      (`render.js:11`)** — `image/home/bac-header1.webp` is a *static* repo image in the
+      69 set, not a blog image; it stays `/couch/` until Stage 6b sweeps it. New posts
+      saved through `/admin/` already carry `/blog/media/…` values and must pass through
+      unchanged, extension included.
+- [x] **`site/admin/admin.js:93` — regression this stage causes.** The edit form sets the
+      featured-image preview `src` from the stored value verbatim, so once the 87 leave
+      the repo the preview 404s on all 90 posts. Map for **display only**; the value
+      posted back to `savePost` must stay the stored one.
+- [x] **Tests** in `api/test/blog-render.test.js` (58 today). Fixture at `:9` is
+      `/couch/uploads/image/blog/x.png` and resolves to nothing — update it. Cover: couch →
+      `/blog/media/<stem>.webp`; `/blog/media/` passthrough with extension intact;
+      author-supplied absolute URL untouched; empty → `DEFAULT_OG_IMAGE` **unmapped**;
+      `json_ld` rewrite.
+- [x] **Delete the 87 from the repo** — in this PR, but only after the production
+      verification above proves the blob copies serve. Expect `site/` ≈ 90 MB → ≈ 14 MB.
+- [ ] **Verify after the owner merges.** PRs into `develop` get no preview environment,
+      so staging verification happens post-merge: all 90 posts render a featured image
+      returning 200, blog index cards intact, `scripts/verify-site.mjs` clean.
 
 ### Review
 
