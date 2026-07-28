@@ -56,6 +56,8 @@ const MARKER_RE = /^[ \t]*<!-- @chrome:([a-z0-9-]+) -->[ \t]*$/;
  */
 const RETIRED = [
   '+27 83 375 5906', '+27833755906', 'wa.me/+27833755906', 'tel:0833755906',
+  '+27 11 353 1111', '+27113531111', 'wa.me/+27113531111',
+  'linkedin.com/company/broughton-amiss-consulting',
 ];
 
 async function loadInputs() {
