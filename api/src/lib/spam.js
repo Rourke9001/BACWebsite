@@ -2,41 +2,30 @@
 
 const crypto = require('node:crypto');
 
-// Thresholds mirror the old inc/form/action.php config.
 const HONEYPOT_FIELD = 'company_website';
 const MIN_FILL_SECONDS = 3;
-const RATE_LIMIT_WINDOW_SEC = 300;
-const RATE_LIMIT_MAX_ATTEMPTS = 5;
+// The pages ship a frozen form_ts literal that only main.js refreshes, so an
+// implausibly OLD stamp means our JS never ran — the no-JS bot signature.
+const MAX_FORM_AGE_SEC = 12 * 60 * 60;
 const IDEMPOTENCY_TTL_SEC = 180;
 const BLOCKED_DOMAINS = ['mailinator.com', 'tempmail.com', '10minutemail.com'];
 const MAX_LINKS = 5;
+const SCORE_THRESHOLD = 4;
 
-// In-memory stores, per Function instance. The old handler's stores were
-// file-based and per-server, so parity is equivalent for this traffic level;
-// a cold start simply resets the window.
-const rateStore = new Map();
 const idempotencyStore = new Map();
 
 function honeypotTriggered(fields) {
   return Boolean((fields[HONEYPOT_FIELD] || '').trim());
 }
 
-function filledTooFast(fields, nowSec) {
+/** Returns a reason string when the timestamp is implausible, otherwise null. */
+function timestampSuspect(fields, nowSec) {
   const started = parseInt(fields.form_ts, 10);
-  if (!Number.isFinite(started) || started <= 0) return false;
-  return nowSec - started < MIN_FILL_SECONDS;
-}
-
-function rateLimited(formId, ip, nowSec) {
-  const key = crypto.createHash('sha256').update(`${formId}|${ip}`).digest('hex');
-  let entry = rateStore.get(key);
-  if (!entry || nowSec > entry.reset) {
-    entry = { reset: nowSec + RATE_LIMIT_WINDOW_SEC, count: 0 };
-  }
-  entry.count += 1;
-  rateStore.set(key, entry);
-  pruneStore(rateStore, nowSec, (e) => e.reset);
-  return entry.count > RATE_LIMIT_MAX_ATTEMPTS;
+  if (!Number.isFinite(started) || started <= 0) return 'missing';
+  const age = nowSec - started;
+  if (age < MIN_FILL_SECONDS) return 'too_fast';
+  if (age > MAX_FORM_AGE_SEC) return 'stale';
+  return null;
 }
 
 function blockedEmailDomain(email) {
@@ -55,6 +44,48 @@ function tooManyLinks(text) {
   return countLinks(text) > MAX_LINKS;
 }
 
+// Signals drawn from the July 2026 blast; weights tuned so no single one blocks.
+const BRAND_SQUAT = ['google', 'facebook', 'microsoft', 'amazon', 'apple', 'yahoo', 'test'];
+const BLAST_PHRASES =
+  /(for reseller|price for reseller|know your price|write about your\s+price|saya ingin tahu harga|ваш[аи]? цен)/i;
+const NON_LATIN = /[Ѐ-ӿ؀-ۿ฀-๿一-鿿぀-ヿ]/;
+const BOT_GREETING = /^\s*(hallo|aloha|hai|privet|bonjour)\b/i;
+
+/**
+ * Weighted spam score. Returns { score, signals } — the handler logs this on
+ * every submission, including accepted ones, so the threshold can be tuned
+ * against real traffic rather than guesswork.
+ */
+function score(fields) {
+  const signals = [];
+  const add = (weight, name) => { signals.push(`${name}:${weight}`); return weight; };
+  let total = 0;
+
+  const phone = String(fields.phone || '').replace(/[\s()-]/g, '');
+  // Real local numbers start 0; international ones carry + or the 27 country code.
+  if (/^\d{11,}$/.test(phone) && !phone.startsWith('0') && !phone.startsWith('27')) {
+    total += add(2, 'phone_bare_intl');
+  }
+
+  const company = String(fields.company || '').trim().toLowerCase();
+  if (BRAND_SQUAT.includes(company)) total += add(2, 'company_brand_squat');
+
+  const subject = String(fields.message_subject || '');
+  const message = String(fields.message || '');
+
+  if (BLAST_PHRASES.test(`${subject} ${message}`)) total += add(3, 'blast_phrase');
+  if (NON_LATIN.test(message)) total += add(2, 'non_latin_body');
+  if (BOT_GREETING.test(subject)) total += add(1, 'bot_greeting');
+  // Template-assembly artefact: runs of whitespace inside a one-line subject.
+  if (/\S {3,}\S/.test(subject)) total += add(1, 'subject_padding');
+
+  return { score: total, signals };
+}
+
+function isSpamByScore(result) {
+  return result.score >= SCORE_THRESHOLD;
+}
+
 function isDuplicateSubmission(fields, ip, userAgent, nowSec) {
   const hash = crypto
     .createHash('sha256')
@@ -65,23 +96,24 @@ function isDuplicateSubmission(fields, ip, userAgent, nowSec) {
     return true;
   }
   idempotencyStore.set(hash, nowSec);
-  pruneStore(idempotencyStore, nowSec, (seen) => seen + IDEMPOTENCY_TTL_SEC);
-  return false;
-}
-
-function pruneStore(store, nowSec, expiryOf) {
-  if (store.size <= 1000) return;
-  for (const [key, value] of store) {
-    if (nowSec > expiryOf(value)) store.delete(key);
+  if (idempotencyStore.size > 1000) {
+    for (const [key, seen] of idempotencyStore) {
+      if (nowSec > seen + IDEMPOTENCY_TTL_SEC) idempotencyStore.delete(key);
+    }
   }
+  return false;
 }
 
 module.exports = {
   HONEYPOT_FIELD,
+  MIN_FILL_SECONDS,
+  MAX_FORM_AGE_SEC,
+  SCORE_THRESHOLD,
   honeypotTriggered,
-  filledTooFast,
-  rateLimited,
+  timestampSuspect,
   blockedEmailDomain,
   tooManyLinks,
+  score,
+  isSpamByScore,
   isDuplicateSubmission,
 };

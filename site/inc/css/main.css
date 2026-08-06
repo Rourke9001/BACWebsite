@@ -1283,6 +1283,21 @@ p {
     margin-top: 4px;
 }
 
+/* Collapses the grid row when Turnstile renders nothing — an uncontested
+   interaction-only widget, or the script being blocked outright. */
+.gl-contact-form-captcha:empty {
+    display: none;
+}
+
+.gl-contact-form-noscript {
+    margin: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--accent-soft);
+    color: var(--text-muted);
+}
+
 .gl-contact-form-actions {
     display: flex;
 }
