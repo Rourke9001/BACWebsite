@@ -136,15 +136,39 @@ if one is ever added, it must include those two directives.
 One widget serves both repos: the site key is public and ships in `main.js`, and
 staging shares production's app settings, so the same secret applies everywhere.
 
-1. Cloudflare dashboard → **Turnstile** → **Add widget**, mode **Managed**.
-2. Register every hostname that serves a form:
-   - `baclogistics.co.za`, `www.baclogistics.co.za`
-   - `ambitious-bush-084cda303.7.azurestaticapps.net` (bare = production)
-   - `ambitious-bush-084cda303-staging.7.azurestaticapps.net`
-   - the BAC Transport production and staging hostnames
-   - `localhost` for local testing
-3. Copy the **site key** into `TURNSTILE_SITE_KEY` in `main.js` (public, safe to commit).
-4. Copy the **secret key** into SWA app settings (below) — never into the repo.
+Done on 2026-08-06. Widget **"BAC contact forms (logistics + transport)"** in the
+`Developer@baclogistics.co.za` account, mode **Managed**, pre-clearance off (the
+sites are not proxied through Cloudflare). Site key
+`0x4AAAAAAEH1ojW5Bful-wg-` — public, and already in `main.js`.
+
+The nine registered hostnames, 9 of the 10 a widget allows:
+
+| | |
+| --- | --- |
+| `baclogistics.co.za` | `www.baclogistics.co.za` |
+| `ambitious-bush-084cda303.7.azurestaticapps.net` | bare = BAC Logistics production |
+| `ambitious-bush-084cda303-staging.7.azurestaticapps.net` | BAC Logistics staging |
+| `bactrans.co.za` | `www.bactrans.co.za` |
+| `black-bush-02d78cb03.7.azurestaticapps.net` | bare = BAC Transport production |
+| `black-bush-02d78cb03-staging.7.azurestaticapps.net` | BAC Transport staging |
+| `localhost` | local testing |
+
+To recreate or roll it: Cloudflare dashboard → **Turnstile** → **Add widget**,
+mode **Managed**, add the hostnames above, then put the site key in `main.js`
+(both repos) and the secret in SWA app settings (below) — never in the repo.
+
+### Which key goes where
+
+The two keys have opposite handling, and conflating them is the easy mistake:
+
+| Key | Where it lives | Why |
+| --- | --- | --- |
+| **Site key** | `main.js`, committed | Public by design — the browser must receive it to render the widget, so it is readable via view-source on every Turnstile site. It is domain-locked: the hostname allowlist above is what makes publishing it safe, and `turnstile.js` rejects a `hostname` mismatch independently. |
+| **Secret key** | SWA app settings only | A real credential. Read as `process.env.TURNSTILE_SECRET`; it appears in no file in either repo. |
+
+A `.env` file would not help the site key. There is no build step in this repo, so
+nothing could inline it into `main.js` — and with a bundler the value would still
+be served to the browser. It would look like a secret without being one.
 
 ### Azure app settings
 
@@ -154,6 +178,10 @@ az staticwebapp appsettings set \
   --resource-group <rg> \
   --setting-names TURNSTILE_SECRET=<secret>
 ```
+
+Set this on **both** Static Web Apps. Until it is set the forms still work, but
+every message arrives subject-prefixed `[UNVERIFIED]` — the deliberate fail-open
+state, not a broken one.
 
 No cost: Turnstile is free and unlimited, and the rate-limit table reuses the
 storage account the blog already pays for (a few cents a month at this volume).

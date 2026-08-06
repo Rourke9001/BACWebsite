@@ -263,7 +263,7 @@
     // Public by design — the secret half lives in SWA app settings. Injected
     // rather than written into 14 static pages: there is no build step, so a new
     // form page needs no extra markup and cannot forget the widget.
-    var TURNSTILE_SITE_KEY = '__TURNSTILE_SITE_KEY__';
+    var TURNSTILE_SITE_KEY = '0x4AAAAAAEH1ojW5Bful-wg-';
 
     function initTurnstile() {
         var forms = document.querySelectorAll('form[action="/api/contact-form"]');
