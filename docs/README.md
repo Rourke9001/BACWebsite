@@ -3,6 +3,10 @@
 Operational runbooks:
 
 - **blog-author-guide.md** — how to write and publish a news post via `/admin/`.
+- **form-anti-spam.md** — the layered anti-spam on `/api/contact-form` (Cloudflare
+  Turnstile, timestamp bounds, durable rate limiting, content scoring), why each layer
+  exists, and the Cloudflare/Azure setup runbook. The same design ships in
+  `BACTransportWebsite` — read before changing `api/src/lib/spam.js` in either repo.
 - **shared-header-duplication.md** — why the header phone/WhatsApp numbers are copied into
   39 files, and the verified recipe for changing one. Read before editing any header value.
 - **bactrans-domain-entanglement.md** — `bactrans.co.za` and `baclogistics.co.za` share one
