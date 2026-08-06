@@ -73,3 +73,41 @@ Deliberately **not** done: the `tel:` landline `0119747472` is unchanged — the
 not flag it, and it is consistent site-wide (39 pages plus the displayed
 `+27 11 974 7472` on the contact and privacy pages). The Stage 7 README housekeeping
 listed at the end of the previous task also remains outstanding.
+
+---
+
+## Contact form anti-spam (2026-08-06)
+
+- [x] Diagnose which gate the live spam passed — all five, three of them broken
+- [x] Cloudflare Turnstile: client injection + server-side siteverify
+- [x] Bound `form_ts` at both ends (the actual root cause)
+- [x] Move rate limiting to Azure Table Storage on the existing account
+- [x] Weighted content scoring, logged on every submission
+- [x] `<noscript>` fallback on all 14 form pages
+- [x] Tests: 64 -> 96, including four that asserted the old broken behaviour
+- [x] Create the Turnstile widget, 9 hostnames covering both sites
+- [x] Verify on localhost and on the staging deployment
+- [x] PR #32 develop -> main
+- [ ] **Owner action:** set `TURNSTILE_SECRET` on both SWAs
+- [ ] Port to `BACTransportWebsite` (handoff prompt issued) — includes its CSP fix
+
+### Review
+
+The honeypot and rate limiter were widely assumed to be working. They were not: the
+rate limiter's in-memory `Map` resets on every SWA Consumption cold start, and the
+min-fill-time gate could only ever reject submissions that were too *fast* — so the
+frozen build-time `form_ts` literal, which is weeks stale, passed it every time. That
+one-sided comparison is the reason a plain scripted POST sailed through, and fixing it
+was three lines. Turnstile is the durable answer, but the bug was ours.
+
+Four existing tests encoded the broken behaviour, one named "frozen/absent form_ts
+passes". Tests asserting a bug is present are worse than no tests: they convert a defect
+into a documented invariant and make the next person hesitate to fix it.
+
+Deliberately **not** done: the frozen `form_ts` literals were left in the HTML rather
+than emptied across 28 files. The age check makes them self-correcting — with no build
+step they only ever get older — so removing them buys nothing.
+
+Fail-open on a Cloudflare outage, a missing secret, or an unreachable rate-limit table
+is intentional and flagged with an `[UNVERIFIED]` subject prefix. For a logistics
+business, dropping real enquiries silently is the worse failure.

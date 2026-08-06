@@ -1,57 +1,10 @@
 #!/usr/bin/env python3
-"""Stage 6a — encode the 87 blog images to WebP for upload to Blob Storage.
+"""Stage 6a — one-shot script that produced the WebP payload for the 87 blog images
+moved to Blob Storage. Kept as the historical record of that migration's assertions;
+see scripts/README.md for the full reasoning (image selection, size growth, ICC handling).
 
     python scripts/migrate-blog-images.py --check          # report, write nothing
     python scripts/migrate-blog-images.py --out <dir>      # encode into <dir>
-
-Blog images belong next to the posts that reference them.  This script produces the
-upload payload; it does not touch Azure and it does not touch the repo.  Uploading and
-deleting the originals are separate, deliberate steps -- see tasks/todo.md.
-
-WHICH IMAGES
-    Derived from the post JSON by REFERENCE SOURCE, never by directory (tasks/lessons.md).
-    site/couch/uploads/image/blog/ holds one *static* image (news.webp, the blog index
-    hero) alongside 26 blog ones, and 61 more blog images sit in the flat image/ folder,
-    so the folder tells you nothing.  What separates the sets is who points at the file:
-    a blog image is referenced only by featured_image / json_ld in a post blob.
-
-WHY EVERY IMAGE IS RE-ENCODED, NOT JUST THE OVERSIZED ONES
-    76 of the 87 are over 300 KB.  Encoding only those would leave a mixed namespace and
-    force render.js to carry a per-file lookup table.  Encoding all 87 makes the render
-    map a single rule -- basename, extension swapped to .webp -- which is provable from
-    the two invariants asserted below (unique basenames, no stem collisions).
-
-WHY A FEW IMAGES GET BIGGER, AND WHY THAT IS ACCEPTED
-    Five sources are already compressed to roughly 1 bit per pixel -- visibly lower
-    quality than the rest of the set -- so WebP q90 spends MORE bytes than they did.  It
-    is not encoding badly; it is faithfully preserving artifacts the source already had.
-    Re-encoding those five at a lower quality to win the comparison would stack a second
-    round of generation loss onto already-lossy inputs to save about 157 KB, against a
-    payload that shrinks by tens of megabytes.  Not worth it, and it would break the
-    uniform .webp namespace that keeps the render map a single rule.
-
-    So the assertion is not "every file must shrink" -- that is a claim about this
-    script's transformation.  The claim worth guarding is about the END STATE: the
-    payload as a whole must shrink dramatically (MIN_SHRINK) and no single image may
-    blow up (MAX_GROWTH).  Every image that does grow is listed in the report, so the
-    outcome stays visible rather than being quietly tolerated.
-
-ICC COLOUR PROFILES -- read before changing encode()
-    39 of the 87 carry one.  Pillow does NOT write icc_profile on save unless you pass
-    it, so a naive re-encode drops them silently.  That already happened in Stage 4: its
-    23 WebP outputs carry none and 20 of their 23 sources had one.  It was harmless there
-    and is harmless here for one measured reason only -- every profile involved is plain
-    'sRGB IEC61966-2.1', which is exactly what a browser assumes for an untagged image.
-    Dropping it is therefore a no-op that saves ~3 KB a file.
-
-    That reasoning does not generalise, so it is enforced rather than trusted: an image
-    carrying a non-sRGB profile FAILS the run.  A lossy re-encode cannot be checked by
-    comparing decoded samples the way the lossless metadata strip in reencode-images.py
-    can, so the interpretation metadata has to be guarded up front.
-
-DISCIPLINE (tasks/lessons.md, "Validate everything before writing anything")
-    Every encode and every assertion runs against in-memory buffers first.  Nothing
-    reaches the disk until the whole plan validates.  A failing run writes nothing.
 """
 
 import argparse
@@ -68,9 +21,8 @@ except ImportError:
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 QUALITY = 90
-# A handful of sources are already compressed to ~1 bpp, so WebP q90 spends more bytes
-# than they did -- it is faithfully reproducing their existing artifacts.  See the
-# docstring.  Individually bounded, and the aggregate below is the real guard.
+# A few sources are already compressed (~1 bpp); WebP faithfully spends more bytes
+# reproducing their existing artifacts. Bounded per-file; MIN_SHRINK is the real guard.
 MAX_GROWTH = 2.0
 MIN_SHRINK = 0.50
 COUCH_RE = re.compile(r"/couch/uploads/[A-Za-z0-9._/-]+")
@@ -199,9 +151,8 @@ def main():
         if len(sources) > 1:
             errors.append(f"{name}: stem collision in the flat namespace -- {', '.join(sources)}")
 
-    # The payload as a whole must be dramatically smaller.  This is the assertion that
-    # would actually catch a misconfigured encoder; the per-file bound above only catches
-    # a pathological single image.
+    # The payload as a whole must shrink dramatically — this catches a misconfigured
+    # encoder; the per-file bound above only catches one pathological image.
     if plan and after_total > before_total * MIN_SHRINK:
         errors.append(f"payload only shrank to {after_total / before_total:.0%} of source "
                       f"-- expected under {MIN_SHRINK:.0%}; check QUALITY")

@@ -1,33 +1,10 @@
 #!/usr/bin/env python3
-"""Re-encode oversized static images to WebP, and strip embedded metadata from the rest.
+"""Re-encodes oversized static images to WebP and strips metadata from the rest — kept as
+two separate jobs since they carry different risk. See scripts/README.md for the full
+breakdown, why blog images are excluded, and the validate-before-write discipline.
 
     python scripts/reencode-images.py --check     # report, write nothing
     python scripts/reencode-images.py             # do it
-
-Two separate jobs, deliberately kept apart because they carry different risk:
-
-1. RE-ENCODE (changes the filename).  Static images over the size threshold become
-   WebP.  Their references live in repo HTML, so they can be swept in the same
-   commit and the diff arithmetic proved.  This script rewrites those references.
-
-2. STRIP METADATA (keeps the filename).  Every other image is rewritten in place
-   with its embedded metadata removed -- losslessly, by dropping container
-   segments, never by re-encoding.  Because filenames do not change, this is safe
-   for the blog images too, whose references live in Blob Storage rather than the
-   repo and so cannot be swept from here.
-
-WHY BLOG IMAGES ARE NOT RE-ENCODED
-    render.js emits post.featured_image verbatim (render.js:55,109), so a blog
-    image's URL comes from the post JSON in Blob Storage, not from anything in
-    this repo.  Renaming site/couch/uploads/image/blog/foo.png to foo.webp would
-    404 every post that references it.  Those images are re-encoded in Stage 6a
-    instead, where they are uploaded to Blob Storage under new names anyway and
-    render.js gains the path map that makes the rename safe.
-
-DISCIPLINE (tasks/lessons.md, "Validate everything before writing anything")
-    Every encode, every reference edit and every assertion runs against in-memory
-    buffers first.  Nothing touches the disk until the whole plan validates.  A
-    failing run must leave the working tree exactly as it found it.
 """
 
 import argparse
@@ -63,11 +40,8 @@ def tracked_text_files():
 
 
 def collect():
-    """Derive both image sets from reference source, never from directory names.
-
-    A blog image and a static image can sit in the same folder, so the folder
-    tells you nothing.  What separates them is who points at them.
-    """
+    """Derive both image sets from reference source, not directory — a blog and a
+    static image can share a folder, so only who points at them tells them apart."""
     referenced = set()
     for f in tracked_text_files():
         with open(os.path.join(ROOT, f), "rb") as fh:
@@ -90,16 +64,8 @@ def collect():
 
 
 def strip_metadata(data, ext):
-    """Remove embedded metadata without touching a single pixel.
-
-    JPEG: drop APP1 (EXIF/XMP -- where the agency workstation paths live),
-          APP13 (Photoshop resource block) and COM.  Deliberately KEEP APP2 and
-          APP14: APP2 carries the ICC colour profile and APP14 carries Adobe's
-          colour-transform flag, and dropping either can shift how the same
-          pixels are displayed.  A decoded-pixel comparison would not catch that,
-          because the samples are unchanged -- only their interpretation is.
-    PNG:  drop the ancillary text chunks, keep IHDR/PLTE/IDAT/IEND and iCCP.
-    """
+    """Removes embedded metadata without touching pixels, JPEG/PNG segment-by-segment.
+    Deliberately keeps colour-profile segments (APP2/APP14/iCCP); see scripts/README.md for why."""
     if ext in (".jpg", ".jpeg"):
         if data[:2] != b"\xff\xd8":
             return data
@@ -150,17 +116,9 @@ def icc_description(profile):
 
 
 def encode_webp(path):
-    """Re-encode to WebP.  Returns the ICC profile description so the caller can guard it.
-
-    Pillow does NOT write icc_profile on save unless you pass it, so a re-encode drops
-    the profile silently.  That is fine here for one measured reason only: every profile
-    in this repo is plain 'sRGB IEC61966-2.1', which is exactly what a browser assumes
-    for an untagged image, so dropping it costs nothing and saves ~3 KB a file.  The
-    reasoning does not generalise, and unlike strip_metadata() above -- where a decoded
-    sample comparison can prove the payload is untouched -- a lossy re-encode cannot be
-    checked that way at all.  So the caller refuses anything non-sRGB rather than
-    trusting this to stay true (tasks/lessons.md, "the pixels are identical").
-    """
+    """Re-encodes to WebP; returns the ICC description so the caller can guard it — Pillow
+    drops icc_profile silently on save, safe only because this repo is all-sRGB. See
+    scripts/README.md for why that doesn't generalise and why the caller refuses non-sRGB."""
     im = Image.open(path)
     profile = im.info.get("icc_profile")
     uses_alpha = (im.mode in ("RGBA", "LA", "PA")

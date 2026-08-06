@@ -260,12 +260,47 @@
         });
     }
 
+    // Public by design — the secret half lives in SWA app settings. Injected
+    // rather than written into 14 static pages: there is no build step, so a new
+    // form page needs no extra markup and cannot forget the widget.
+    var TURNSTILE_SITE_KEY = '0x4AAAAAAEH1ojW5Bful-wg-';
+
+    function initTurnstile() {
+        var forms = document.querySelectorAll('form[action="/api/contact-form"]');
+        if (!forms.length || TURNSTILE_SITE_KEY.indexOf('__') === 0) return;
+
+        Array.prototype.forEach.call(forms, function (form) {
+            if (form.querySelector('.cf-turnstile')) return;
+
+            var formId = form.querySelector('input[name="form_id"]');
+            var slot = document.createElement('div');
+            slot.className = 'cf-turnstile gl-contact-form-captcha';
+            slot.setAttribute('data-sitekey', TURNSTILE_SITE_KEY);
+            slot.setAttribute('data-action', formId ? formId.value : '');
+            // Tokens expire 300s after issue; without this a slow filler is rejected.
+            slot.setAttribute('data-refresh-expired', 'auto');
+            slot.setAttribute('data-appearance', 'interaction-only');
+
+            var actions = form.querySelector('.gl-contact-form-actions');
+            if (actions) {
+                form.insertBefore(slot, actions);
+            } else {
+                form.appendChild(slot);
+            }
+        });
+
+        if (document.querySelector('script[data-turnstile]')) return;
+        var script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+        script.async = true;
+        script.defer = true;
+        script.setAttribute('data-turnstile', '');
+        document.head.appendChild(script);
+    }
+
     function initBlogPagination() {
-        // Progressive enhancement for /blog/ pagination: fetch the next page in
-        // the background and swap the card grid + pagination in place, instead
-        // of a full page reload. URLs, SEO and no-JS behavior are unchanged —
-        // the server still renders every /blog/pg/N/ page; any failure falls
-        // back to a normal navigation.
+        // Progressive enhancement: swaps the grid in place instead of a full reload.
+        // URLs/SEO/no-JS behavior are unchanged; any failure falls back to normal nav.
         var grid = document.getElementById('gl-blog-grid');
         var paginate = document.getElementById('b-paginate');
         if (!grid || !paginate || !window.fetch || !window.DOMParser ||
@@ -314,6 +349,7 @@
         initFaqs();
         initCounters();
         initFormTimestamps();
+        initTurnstile();
         initBlogPagination();
     });
 }(jQuery));

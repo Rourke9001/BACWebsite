@@ -4,9 +4,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { handleSubmission, SUCCESS_REDIRECT, DEFAULT_RECIPIENT } = require('../src/lib/handler');
 const { createEmailSender } = require('../src/lib/email');
+const { createMemoryRateStore } = require('../src/lib/rate-store');
+const { TOKEN_FIELD } = require('../src/lib/turnstile');
 
 const NOW = 2_000_000_000;
 let ipCounter = 0;
+
+// Shared so counts accumulate across run() calls the way they do in a live
+// instance; every test that is not about rate limiting uses a fresh IP.
+const sharedRateStore = createMemoryRateStore();
+const passingCaptcha = { async verify() { return { ok: true, outcome: 'pass' }; } };
 
 function freshIp() {
   ipCounter += 1;
@@ -30,11 +37,16 @@ function validFields(overrides = {}) {
   };
 }
 
-function run(fields, { ip = freshIp(), wantsJson = true, sender, nowSec = NOW } = {}) {
+function run(fields, {
+  ip = freshIp(), wantsJson = true, sender, nowSec = NOW,
+  captcha = passingCaptcha, rateStore = sharedRateStore, logs,
+} = {}) {
   const sent = [];
   const deps = {
     sender: sender || { async send(msg) { sent.push(msg); } },
-    logger: () => {},
+    verifyCaptcha: captcha,
+    rateStore,
+    logger: logs ? (msg) => logs.push(msg) : () => {},
   };
   const meta = { ip, userAgent: 'test-agent', wantsJson, nowSec };
   return handleSubmission(fields, meta, deps).then((result) => ({ result, sent }));
@@ -67,27 +79,94 @@ test('honeypot value drops the submission', async () => {
   assert.equal(sent.length, 0);
 });
 
-test('submissions faster than 3s are rejected; frozen/absent form_ts passes', async () => {
+test('form_ts must be plausible: too fast, stale, and absent are all rejected', async () => {
   const fast = await run(validFields({ form_ts: String(NOW - 1) }));
   assert.equal(fast.result.payload.ok, false);
   assert.equal(fast.sent.length, 0);
 
+  // The regression that let the July 2026 blast through: a stamp our JS never
+  // refreshed means the page was never rendered in a browser.
   const absent = await run(validFields({ form_ts: '' }));
-  assert.equal(absent.result.payload.ok, true);
+  assert.equal(absent.result.payload.ok, false);
+  assert.equal(absent.sent.length, 0);
 
   const frozen = await run(validFields({ form_ts: '1784045684' }));
-  assert.equal(frozen.result.payload.ok, true);
+  assert.equal(frozen.result.payload.ok, false);
+  assert.equal(frozen.sent.length, 0);
+
+  const plausible = await run(validFields({ form_ts: String(NOW - 3600) }));
+  assert.equal(plausible.result.payload.ok, true);
 });
 
-test('6th submission in the window from one IP is rate limited', async () => {
+test('4th submission in the window from one IP is rate limited', async () => {
   const ip = freshIp();
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 3; i++) {
     const { result } = await run(validFields({ message: `unique message ${i}` }), { ip });
     assert.equal(result.payload.ok, true, `submission ${i + 1} should pass`);
   }
-  const { result, sent } = await run(validFields({ message: 'unique message 6' }), { ip });
+  const { result, sent } = await run(validFields({ message: 'unique message 4' }), { ip });
   assert.equal(result.payload.ok, false);
   assert.equal(sent.length, 0);
+});
+
+test('a failed captcha is rejected without sending', async () => {
+  const captcha = { async verify() { return { ok: false, outcome: 'fail', reason: 'invalid-input-response' }; } };
+  const { result, sent } = await run(validFields(), { captcha });
+  assert.equal(result.payload.ok, false);
+  assert.equal(sent.length, 0);
+  assert.match(result.payload.message, /verification failed/i);
+});
+
+test('the captcha token never reaches the email body', async () => {
+  const { sent } = await run(validFields({ [TOKEN_FIELD]: 'tok-should-not-appear' }));
+  assert.equal(sent.length, 1);
+  assert.doesNotMatch(sent[0].text, /tok-should-not-appear/);
+});
+
+test('a Cloudflare outage still delivers, but flags the mail as unverified', async () => {
+  const captcha = { async verify() { return { ok: true, outcome: 'unverified', reason: 'siteverify HTTP 502' }; } };
+  const { result, sent } = await run(validFields(), { captcha });
+  assert.equal(result.payload.ok, true);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].subject, '[UNVERIFIED] BAC Logistics Contact Form');
+  assert.match(sent[0].text, /NOT verified as human/);
+});
+
+test('a missing TURNSTILE_SECRET delivers but flags the mail', async () => {
+  const captcha = { async verify() { return { ok: true, outcome: 'skipped' }; } };
+  const { sent } = await run(validFields(), { captcha });
+  assert.equal(sent[0].subject, '[UNVERIFIED] BAC Logistics Contact Form');
+});
+
+test('the real spam payload is blocked on score even if it clears every other gate', async () => {
+  const logs = [];
+  const { result, sent } = await run(validFields({
+    name: 'Robertgot',
+    email: 'nhoehn02@gmail.com',
+    phone: '83461666195',
+    company: 'google',
+    message_subject: 'Hallo    write about your   price for reseller',
+    message: 'Hi, I wanted to know your price.',
+  }), { logs });
+
+  assert.equal(result.payload.ok, false);
+  assert.equal(sent.length, 0);
+  assert.ok(logs.some((l) => /spam_score_block/.test(l)), 'expected a spam_score_block log');
+});
+
+test('a realistic enquiry scores clean and is delivered untagged', async () => {
+  const { result, sent } = await run(validFields({
+    name: 'Pieter van der Merwe',
+    email: 'pieter@acmefreight.co.za',
+    phone: '0821234567',
+    company: 'Acme Freight',
+    message_subject: 'Customs clearing quote',
+    message: 'We need help clearing a shipment of machinery at Durban harbour. Please advise on cost.',
+  }));
+
+  assert.equal(result.payload.ok, true);
+  assert.equal(sent[0].subject, 'BAC Logistics Contact Form');
+  assert.doesNotMatch(sent[0].text, /Spam score/);
 });
 
 test('required fields and email format are validated', async () => {

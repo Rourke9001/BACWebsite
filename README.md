@@ -18,9 +18,9 @@
 
 ## What's on the site
 
-38 static pages in `site/` (home, about, contact, services index + 13 service pages,
-video hub + ~16 videos, 2 information pages incl. privacy policy, 5 downloadable docs
-in `/files/`) plus ~99 blog posts served dynamically from Blob Storage
+37 static pages in `site/` (home, about, contact, services index + 13 service pages,
+video hub + ~16 videos, 2 information pages incl. privacy policy, 6 downloadable docs
+in `/files/`) plus 90 blog posts served dynamically from Blob Storage
 (storage account `bacblogcontent`, container `blog`).
 
 ## Scope decisions (confirmed 2026-07-14)

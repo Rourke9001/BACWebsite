@@ -28,10 +28,8 @@ function postUrl(post) {
   return post.folder ? `/blog/${post.folder}/${post.name}.html` : `/blog/${post.name}.html`;
 }
 
-// Mirrors render.js's mediaUrl(). The 90 migrated posts still store their pre-Stage-6a
-// /couch/uploads/ paths, and those files no longer exist in the deployed site, so the
-// preview has to resolve them the same way the rendered page does. DISPLAY ONLY — the
-// form field keeps the stored value, so saving a post never rewrites it.
+// Mirrors render.js's mediaUrl() — the preview must resolve the same pre-Stage-6a
+// /couch/ paths the live page does. DISPLAY ONLY: the form field keeps the stored value.
 function previewUrl(value) {
   const m = /^\/couch\/uploads\/(?:[^/]+\/)*([A-Za-z0-9][A-Za-z0-9._-]*)\.(?:png|jpe?g|gif|webp)$/i
     .exec(String(value || '').trim());
@@ -149,9 +147,8 @@ async function save() {
     setStatus(`Save failed: ${err.message}`, 'err');
     return;
   }
-  // Land back on the post list with an unmissable confirmation instead of
-  // leaving the filled-in form on screen. The save has succeeded at this
-  // point, so a failed list reload must not mask the confirmation.
+  // Lands back on the list with a confirmation instead of leaving the form on screen —
+  // the save already succeeded, so a failed list reload must not mask that.
   await showList().catch(() => {});
   if (post.unpublished) {
     showBanner(`"${post.title}" saved as unpublished — it is hidden from the site.`, null);
@@ -327,9 +324,8 @@ $('#adm-featured-file').addEventListener('change', async (e) => {
 });
 $('#adm-delete').addEventListener('click', async () => {
   if (!state.editingSlug) return;
-  // The recovery promise below is true only because the storage account has blob soft
-  // delete (30 days) and versioning enabled — no code here guarantees it. If those
-  // settings change, change this wording. See README.md → Blog content backup.
+  // True only because the storage account has soft delete + versioning enabled — no code
+  // here guarantees it. If that changes, update this wording (see README.md → Blog backup).
   if (!confirm('Delete this post? (Recoverable from storage for 30 days.)')) return;
   try {
     await api(`/api/blog-admin/posts/${state.editingSlug}`, { method: 'DELETE' });

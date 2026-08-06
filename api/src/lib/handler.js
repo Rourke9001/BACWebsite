@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const spam = require('./spam');
+const { TOKEN_FIELD } = require('./turnstile');
 
 const FORMS = {
   contact_form: { subject: 'BAC Logistics Contact Form' },
@@ -37,7 +38,7 @@ function validEmail(email) {
 
 /**
  * Pure submission pipeline. `meta` = { ip, userAgent, wantsJson, nowSec }.
- * `deps` = { sender, recipient, from, logger }.
+ * `deps` = { sender, recipient, from, logger, verifyCaptcha, rateStore }.
  */
 async function handleSubmission(fields, meta, deps) {
   const rid = crypto.randomUUID();
@@ -52,19 +53,36 @@ async function handleSubmission(fields, meta, deps) {
     return buildResult(false, 'Unknown form.', { rid, wantsJson });
   }
 
-  // Anti-spam gates, in the old handler's order. Rejections use generic
-  // messages on purpose — no hints for bots.
+  // Cheapest gates first, then the durable rate limit, then the external
+  // verify last — a blast must not become thousands of siteverify calls.
+  // Rejections use generic messages on purpose: no hints for bots.
   if (spam.honeypotTriggered(fields)) {
     log(`[${rid}] honeypot_trigger form=${formId} ip=${ip}`);
     return buildResult(false, 'Something went wrong. Please try again.', { rid, wantsJson, silentDrop: true });
   }
-  if (spam.filledTooFast(fields, nowSec)) {
-    log(`[${rid}] min_time_gate form=${formId} ip=${ip}`);
-    return buildResult(false, 'Please take a moment and try again.', { rid, wantsJson, silentDrop: true });
+
+  const tsReason = spam.timestampSuspect(fields, nowSec);
+  if (tsReason) {
+    log(`[${rid}] timestamp_${tsReason} form=${formId} ip=${ip}`);
+    return buildResult(false, 'Please reload the page and try again.', { rid, wantsJson, silentDrop: true });
   }
-  if (spam.rateLimited(formId, ip, nowSec)) {
-    log(`[${rid}] rate_limited form=${formId} ip=${ip}`);
-    return buildResult(false, 'Too many submissions. Please try again later.', { rid, wantsJson, silentDrop: true });
+
+  if (deps.rateStore) {
+    const { limited, count } = await deps.rateStore.hit(formId, ip, nowSec);
+    if (limited) {
+      log(`[${rid}] rate_limited form=${formId} ip=${ip} count=${count}`);
+      return buildResult(false, 'Too many submissions. Please try again later.', { rid, wantsJson, silentDrop: true });
+    }
+  }
+
+  let captchaOutcome = 'disabled';
+  if (deps.verifyCaptcha) {
+    const verdict = await deps.verifyCaptcha.verify({ token: fields[TOKEN_FIELD], ip, rid, formId });
+    captchaOutcome = verdict.outcome;
+    if (!verdict.ok) {
+      log(`[${rid}] captcha_fail form=${formId} ip=${ip} reason=${verdict.reason}`);
+      return buildResult(false, 'Verification failed. Please reload the page and try again.', { rid, wantsJson, silentDrop: true });
+    }
   }
 
   // Validation
@@ -83,6 +101,14 @@ async function handleSubmission(fields, meta, deps) {
     return buildResult(false, 'Please correct the highlighted fields.', { errors, rid, wantsJson });
   }
 
+  // Logged on every submission, accepted ones included, so the threshold can be
+  // tuned against real traffic.
+  const spamScore = spam.score(fields);
+  if (spam.isSpamByScore(spamScore)) {
+    log(`[${rid}] spam_score_block form=${formId} ip=${ip} score=${spamScore.score} signals=${spamScore.signals.join(',')}`);
+    return buildResult(false, 'Something went wrong. Please try again.', { rid, wantsJson, silentDrop: true });
+  }
+
   // Duplicate submits inside the TTL pretend success without re-sending.
   const contentFields = cleanFields(fields);
   if (spam.isDuplicateSubmission(contentFields, ip, userAgent, nowSec)) {
@@ -91,21 +117,24 @@ async function handleSubmission(fields, meta, deps) {
   }
 
   const to = deps.recipient || DEFAULT_RECIPIENT;
+  // Mail that reached the inbox without a passing captcha is flagged rather than
+  // dropped, so a Cloudflare outage or a missing secret is visible, not silent.
+  const verified = captchaOutcome === 'pass';
   try {
     await deps.sender.send({
       to,
       from: deps.from || DEFAULT_FROM,
       fromName: FROM_NAME,
       replyTo: String(fields.email),
-      subject: formCfg.subject,
-      text: composeBody(contentFields, { formId, ip, rid }),
+      subject: verified ? formCfg.subject : `[UNVERIFIED] ${formCfg.subject}`,
+      text: composeBody(contentFields, { formId, ip, rid, captchaOutcome, spamScore }),
     });
   } catch (err) {
     log(`[${rid}] send_failed form=${formId}: ${err.message}`);
     return buildResult(false, 'We could not send your message. Please try again later.', { rid, wantsJson });
   }
 
-  log(`[${rid}] sent form=${formId} to=${to}`);
+  log(`[${rid}] sent form=${formId} to=${to} captcha=${captchaOutcome} score=${spamScore.score}`);
   return buildResult(true, 'Thank you.', { rid, wantsJson });
 }
 
@@ -114,10 +143,11 @@ function cleanFields(fields) {
   delete cleaned.form_id;
   delete cleaned.form_ts;
   delete cleaned[spam.HONEYPOT_FIELD];
+  delete cleaned[TOKEN_FIELD];
   return cleaned;
 }
 
-function composeBody(fields, { formId, ip, rid }) {
+function composeBody(fields, { formId, ip, rid, captchaOutcome, spamScore }) {
   const labels = {
     name: 'Name',
     email: 'Email',
@@ -134,6 +164,12 @@ function composeBody(fields, { formId, ip, rid }) {
     if (value) lines.push(`${label}: ${value}`);
   }
   lines.push('', `Form: ${formId}`, `IP: ${ip}`, `Request ID: ${rid}`);
+  if (captchaOutcome && captchaOutcome !== 'pass') {
+    lines.push(`Captcha: ${captchaOutcome} — this message was NOT verified as human`);
+  }
+  if (spamScore && spamScore.score > 0) {
+    lines.push(`Spam score: ${spamScore.score} (${spamScore.signals.join(', ')})`);
+  }
   return lines.join('\n');
 }
 

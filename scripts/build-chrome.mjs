@@ -1,39 +1,7 @@
 #!/usr/bin/env node
 /**
- * Expand the shared site chrome into every page that carries it. Zero dependencies.
- *
- *   partials/*.html   the structure — header, nav, footer, head links, GTM
- *   data/site.json    the values — phone, WhatsApp, GTM id, logo paths, socials
- *
- * Each target file marks the regions it wants with inert HTML comments:
- *
- *     <!-- @chrome:header-top -->
- *     …generated…
- *     <!-- @end:header-top -->
- *
- * Everything outside the markers is left byte-for-byte alone, so per-page content
- * (title, meta, body, the home page's slider assets) is never touched. Comments are
- * used because they are inert in HTML, unambiguous to parse, and survive arbitrary
- * markup changes inside the region.
- *
- * Two targets, one mechanism: the 37 static pages in site/ and the two blog
- * templates in api/src/blog-templates/. The blog templates are 5% of the files but
- * 73% of the public URLs (post.html alone renders 90 posts), so leaving them on a
- * separate mechanism would defeat the point. render.js keeps reading them from disk
- * and doing its own {{token}} pass at request time — this runs at build time and
- * never touches {{...}}.
- *
- * Value tokens use ${name} precisely because {{name}} belongs to render.js. Only
- * partial content is substituted, and an unknown or unused token is an error.
- *
- * Generated output is committed. That keeps `python -m http.server` in site/ a
- * faithful preview, keeps SWA deploying site/ with no build step in the path, and
- * makes every change a reviewable diff. scripts/check-chrome.mjs enforces it.
- *
- * Usage:
- *   node scripts/build-chrome.mjs            # expand in place
- *   node scripts/build-chrome.mjs --check    # verify only, non-zero if stale
- *   node scripts/build-chrome.mjs --list     # show regions and their targets
+ * Expands partials/*.html + data/site.json into every file carrying <!-- @chrome:name -->
+ * markers. See scripts/README.md for the mechanism, usage, and what --check catches.
  */
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -47,13 +15,8 @@ const OPEN = (name) => `<!-- @chrome:${name} -->`;
 const CLOSE = (name) => `<!-- @end:${name} -->`;
 const MARKER_RE = /^[ \t]*<!-- @chrome:([a-z0-9-]+) -->[ \t]*$/;
 
-/**
- * Values that must not survive anywhere in the output. A chrome-only expander
- * cannot catch a contact detail sitting in page body content, and this repo has
- * exactly that trap: a third tel: on the contact page, outside every chrome
- * region. That one is marked (contact-phone-link), but the assertion is what
- * guarantees the next one gets noticed instead of silently going stale.
- */
+/** Retired contact values that must not survive anywhere in output — catches page-body
+ * copies a marker-keyed expander would otherwise miss. See docs/shared-header-duplication.md. */
 const RETIRED = [
   '+27 83 375 5906', '+27833755906', 'wa.me/+27833755906', 'tel:0833755906',
   '+27 11 353 1111', '+27113531111', 'wa.me/+27113531111',
@@ -101,7 +64,6 @@ function applyTo(text, partials, site, file) {
     if (!partials.has(name)) {
       throw new Error(`${file}:${i + 1} marks region "${name}" but partials/${name}.html does not exist`);
     }
-    // Find the matching close marker.
     let end = -1;
     for (let j = i + 1; j < lines.length; j += 1) {
       if (lines[j].trim() === CLOSE(name)) { end = j; break; }
@@ -183,9 +145,8 @@ async function main() {
     : `✓ ${files.length} files checked, ${pending.length} rewritten`);
 }
 
-// Everything thrown below main() is an operator error — a missing value, an
-// unbalanced marker, a partial that no file references. Those deserve the message,
-// not a stack trace; a real bug still surfaces via --trace.
+// Errors here are operator errors (bad value, unbalanced marker) that deserve a
+// message, not a stack trace — a real bug still surfaces via --trace.
 try {
   await main();
 } catch (err) {
