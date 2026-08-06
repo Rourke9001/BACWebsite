@@ -1,34 +1,7 @@
 #!/usr/bin/env node
 /**
- * Back up the `blog` Blob Storage container to a timestamped local directory.
- * Zero dependencies — the Azure CLI supplies a short-lived SAS, everything else
- * is `fetch` and `node:crypto`.
- *
- * The post JSONs are the only data in this system that is not in git. The
- * storage account is Standard_LRS (three copies in one West Europe datacenter),
- * blob soft delete covers 30 days and container deletion is not protected at
- * all — see README.md, Operations → Blog content backup. This script is the
- * only thing standing between a container-level accident and total loss.
- *
- * Backs up every prefix in the container, not just posts/: after the image
- * split, uploads/ holds blog images that exist nowhere else either.
- *
- * Writes:
- *   <out>/<prefix>/<file>   every blob, byte-for-byte
- *   <out>/manifest.json     per-blob size, lastModified, etag and SHA-256
- *
- * The manifest is what makes a restore verifiable rather than hopeful: re-hash
- * the files and compare, and you know the backup is intact before you rely on it.
- *
- * Usage:
- *   node scripts/backup-blog.mjs [--out <dir>] [--prefix <p>] [--verify <dir>]
- *
- *   --out <dir>      destination root (default: ./backups)
- *   --prefix <p>     restrict to one prefix, e.g. posts/ (default: whole container)
- *   --verify <dir>   re-hash an existing backup against its manifest and exit
- *
- * Requires: az CLI, logged in (`az login`) with rights to read the account key.
- * Exit code 0 = backup complete and verified, 1 = something failed.
+ * Backs up the `blog` Blob Storage container — the only production data not in git —
+ * to a timestamped local dir + manifest.json. See scripts/README.md for flags and usage.
  */
 import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -71,19 +44,14 @@ function fail(msg) {
 
 // --- azure ---------------------------------------------------------------
 
-/**
- * Mint a read+list SAS for the container. `--auth-mode key` makes the CLI fetch
- * the account key itself; we never print it and never persist it. The token is
- * short-lived by design — this script is run by hand, not on a schedule that
- * needs a long-lived credential.
- */
+/** Mints a read+list SAS via `--auth-mode key` — the account key itself is never
+ * printed or persisted, and the token is deliberately short-lived (hand-run script). */
 async function containerSas() {
   const expiry = new Date(Date.now() + SAS_MINUTES * 60_000)
     .toISOString().replace(/\.\d{3}Z$/, 'Z');
 
-  // Runs through a shell because `az` is a .cmd on Windows and Node refuses to
-  // execFile those directly. Every argument here is a module constant or an ISO
-  // timestamp we generated — no script argument reaches this string.
+  // Shells out because `az` is a .cmd on Windows and execFile refuses those directly —
+  // safe here since every piece of this string is a module constant, never user input.
   const cmd = `az storage container generate-sas --account-name ${ACCOUNT}`
     + ` --name ${CONTAINER} --permissions rl --expiry ${expiry}`
     + ' --auth-mode key -o tsv';
@@ -99,11 +67,8 @@ async function containerSas() {
   }
 }
 
-/**
- * List Blobs REST call, following NextMarker. Azure caps a page at 5,000; we
- * are far under that today, but paging is four lines and removes a silent
- * truncation risk from a backup script, which is the wrong place for one.
- */
+/** List Blobs REST call, following NextMarker — Azure caps a page at 5,000, and a
+ * silent truncation risk isn't worth the four lines it takes to avoid it here. */
 async function listBlobs(sas, prefix) {
   const blobs = [];
   let marker = '';

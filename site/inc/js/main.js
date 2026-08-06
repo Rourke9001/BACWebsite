@@ -261,11 +261,8 @@
     }
 
     function initBlogPagination() {
-        // Progressive enhancement for /blog/ pagination: fetch the next page in
-        // the background and swap the card grid + pagination in place, instead
-        // of a full page reload. URLs, SEO and no-JS behavior are unchanged —
-        // the server still renders every /blog/pg/N/ page; any failure falls
-        // back to a normal navigation.
+        // Progressive enhancement: swaps the grid in place instead of a full reload.
+        // URLs/SEO/no-JS behavior are unchanged; any failure falls back to normal nav.
         var grid = document.getElementById('gl-blog-grid');
         var paginate = document.getElementById('b-paginate');
         if (!grid || !paginate || !window.fetch || !window.DOMParser ||

@@ -5,10 +5,8 @@ const path = require('node:path');
 
 const ORIGIN = 'https://baclogistics.co.za';
 const POSTS_PER_PAGE = 12;
-// Share image for a post that has neither og_image nor featured_image. Same image the
-// static pages fall back to; it is a STATIC repo asset in the 69-file set, not a blog
-// image, so it is deliberately never passed through mediaUrl() below — it still lives at
-// /couch/ and Stage 6b's /couch/ -> /media/ sweep must catch this line.
+// Same static hero the site pages fall back to (a repo asset, not a blog image) — never
+// passed through mediaUrl(), which only rewrites the legacy /couch/ blog-image pattern.
 const DEFAULT_OG_IMAGE = '/media/home/bac-header1.webp';
 const TPL_DIR = path.join(__dirname, '..', '..', 'blog-templates');
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
@@ -29,20 +27,8 @@ function fill(template, values) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => (key in values ? values[key] : ''));
 }
 
-/**
- * Stage 6a moved every blog image into Blob Storage under `uploads/`, served at
- * `/blog/media/<file>` (handler.js:35-45). The 90 stored posts still carry their
- * pre-migration `/couch/uploads/` paths and are deliberately NOT rewritten — mapping at
- * render time leaves live data untouched and makes the whole change a `git revert`.
- *
- * All 87 were re-encoded to WebP on upload, and two invariants make this one rule rather
- * than a lookup table: every basename is unique, and none collides once the extension is
- * swapped. Both are asserted on every run of scripts/migrate-blog-images.py.
- *
- * Everything else is returned untouched — in particular an author-supplied absolute URL,
- * and any `/blog/media/` value already written by the admin upload (admin-blog.js:65),
- * whose extension must survive because those blobs are stored exactly as uploaded.
- */
+/** Maps a post's pre-migration `/couch/uploads/` path to its Stage 6a Blob location;
+ * everything else passes through untouched. See README.md → "Where blog images live". */
 const COUCH_IMAGE =
   /^\/couch\/uploads\/(?:[^/]+\/)*([A-Za-z0-9][A-Za-z0-9._-]*)\.(?:png|jpe?g|gif|webp)$/i;
 
@@ -52,17 +38,12 @@ function mediaUrl(value) {
   return m ? `/blog/media/${m[1]}.webp` : v;
 }
 
-// Six posts also name their image inside a json_ld string, where the path is embedded in
-// JSON rather than being the whole field — so the anchored test above cannot be applied
-// to the field as a whole. Post bodies carry no such references (verified across all 90).
+// json_ld embeds the image path inside a JSON string rather than as the whole field, so
+// the anchored regex above doesn't apply — post bodies carry no such references (verified).
 const EMBEDDED_COUCH_IMAGE = /\/couch\/uploads\/[A-Za-z0-9._/-]+/g;
 
-/**
- * og:image must be an absolute URL — relative values are unreliable across scrapers and
- * several ignore them outright. Stored values are root-relative (`/couch/uploads/...`),
- * but /admin/ accepts a free-text og_image, so an author-supplied absolute URL has to
- * survive untouched.
- */
+/** og:image must be absolute — scrapers ignore relative URLs. Stored values are root-
+ * relative, but /admin/'s free-text og_image field can already hold a full URL. */
 function absoluteUrl(value) {
   const v = String(value == null ? '' : value).trim();
   if (!v) return '';
@@ -204,10 +185,8 @@ function renderIndex(allPosts, page) {
   const totalPages = Math.max(1, Math.ceil(posts.length / POSTS_PER_PAGE));
   if (page < 1 || page > totalPages) return null;
   const slice = posts.slice((page - 1) * POSTS_PER_PAGE, page * POSTS_PER_PAGE);
-  // The static mirror's canonical is always /blog/ regardless of page number
-  // (verified: site/blog/pg/2, pg/5, pg/8 all emit
-  // <link rel="canonical" href="https://baclogistics.co.za/blog/" />) — not
-  // a page-specific `?pg=N` URL. Replicated here for markup fidelity.
+  // The static mirror's canonical is always /blog/ regardless of page number (verified:
+  // pg/2, pg/5, pg/8 all emit the same canonical) — replicated here for markup fidelity.
   const canonical = `${ORIGIN}/blog/`;
   return fill(tpl('index.html'), {
     canonical: esc(canonical),

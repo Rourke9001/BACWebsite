@@ -60,6 +60,12 @@
      dropping those changes how identical pixels are displayed, which a decoded-pixel
      comparison would not catch.
 
+  The WebP re-encode itself drops the ICC colour profile — Pillow doesn't preserve it on
+  save. That's safe here only because every image in this repo carries the same plain
+  `sRGB IEC61966-2.1` profile (a browser's own default assumption for an untagged image),
+  which doesn't generalise to a repo with mixed profiles — so the script refuses to
+  re-encode anything it finds tagged otherwise, rather than assume that stays true.
+
   **It does not touch blog images, on purpose** — those moved to Blob Storage in Stage 6a
   (see `migrate-blog-images.py` below). The two sets are separated by **reference source,
   not directory**: blog and static images shared folders, so the folder told you nothing.
@@ -80,7 +86,20 @@
   It derives the image set from post JSON by **reference source** — a blog image is one
   referenced only by `featured_image` / `json_ld` in a post blob — and asserts the two
   invariants that let `render.js` map paths with a single rule instead of a lookup table:
-  every basename is unique, and none collides once the extension becomes `.webp`.
+  every basename is unique, and none collides once the extension becomes `.webp`. That's
+  also why every image is re-encoded rather than just the oversized ones — a mixed
+  namespace would force `render.js` back onto a per-file lookup table.
+
+  A few already-compressed sources come out **larger** as WebP; that's accepted per-file
+  (bounded by `MAX_GROWTH`, listed in the report) as long as the payload as a whole shrinks
+  dramatically (`MIN_SHRINK`) — re-compressing those few harder to win the comparison would
+  just stack more generation loss for a rounding error against the total saved.
+
+  Same ICC caveat as `reencode-images.py`: every source profile here is plain
+  `sRGB IEC61966-2.1`, so Pillow silently dropping it on re-encode is a no-op — the script
+  fails the run on anything tagged otherwise rather than assume that keeps holding. It also
+  asserts the output carries none of a fixed set of leftover Adobe/workstation metadata
+  strings before writing.
 
   It encodes and uploads nothing to Azure itself. Uploading is a separate deliberate step:
 
@@ -116,3 +135,10 @@
 
   `docs/` and `tasks/` are excluded as dated records; rewriting a URL inside a document
   that reports what was measured on a given day would falsify it.
+
+  Line-ending checks compare each edited file against its **committed git blob**, not the
+  working copy — comparing the working copy to itself can't fail, and would have missed a
+  real stale checkout the first run caught: `api/src/blog-templates/error.html` was already
+  CRLF on disk while its blob was LF. Because that path is pinned `-text` in
+  `.gitattributes`, git just records whatever the working copy says, byte for byte — so a
+  stale checkout is a hazard the pin does not protect you from.

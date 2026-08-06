@@ -4,10 +4,8 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const render = require('../src/lib/blog/render');
 
-// featured_image is deliberately a /couch/uploads/ path: that is what all 90 live posts
-// still store after Stage 6a, which maps them to Blob Storage at render time instead of
-// rewriting the blobs. Stage 6b's /couch/ -> /media/ sweep must NOT rewrite this line —
-// it is the map's input, not a reference to a repo file.
+// Deliberately /couch/uploads/ — what all 90 live posts still store post-Stage-6a (mapped
+// at render time). This is the map's INPUT, not a repo file ref — must not be rewritten.
 const post = (over = {}) => ({
   title: 'Test Post Heading', name: 'test-post', folder: null, date: '2026-03-24',
   author: '', featured_image: '/couch/uploads/image/blog/x.png', featured_image_alt: 'Alt text',
@@ -59,9 +57,8 @@ test('og:image falls back featured_image -> site default, and is always absolute
   const external = render.renderPost(post({ og_image: 'https://cdn.example.com/a.png' }));
   assert.ok(external.includes('property="og:image" content="https://cdn.example.com/a.png"'));
 
-  // Neither field set — a future post saved without an image still shares something.
-  // The default is a STATIC repo asset, not a blog image, so it must NOT be mapped into
-  // /blog/media/ — nothing was uploaded under that name and it would 404.
+  // Neither field set: falls back to a STATIC repo asset (not a blog image), so it must
+  // NOT be mapped into /blog/media/ — nothing was uploaded under that name, would 404.
   const bare = render.renderPost(post({ og_image: '', featured_image: '' }));
   assert.ok(bare.includes(
     'property="og:image" content="https://baclogistics.co.za/media/home/bac-header1.webp"'));
@@ -109,9 +106,8 @@ test('Stage 6a: blog images resolve to Blob Storage, everything else is left alo
   }));
   assert.ok(ld.includes('"image":"/blog/media/y.webp"'));
   assert.ok(ld.includes('"logo":"/blog/media/l.webp"'));
-  // Scoped to the json_ld block on purpose. The surrounding page still carries
-  // /couch/uploads/image/header/ for the logo and image/blog/news.webp for the index
-  // hero — static repo assets that stay put until Stage 6b sweeps them.
+  // Scoped to the json_ld string itself — replace() runs on that value alone, so it
+  // can't touch a /couch/ reference anywhere else the template might carry.
   const ldBlock = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(ld)[1];
   assert.ok(!ldBlock.includes('/couch/uploads/'));
 

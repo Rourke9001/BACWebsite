@@ -1,21 +1,7 @@
 #!/usr/bin/env node
 /**
- * Verify a deployed copy of site/ (staging, a PR preview, or production):
- * every page loads, every same-site reference on every page resolves, the
- * configured redirects + 404 page behave, the downloadable docs serve with
- * the right content-type, and every page carries populated og:/twitter:
- * metadata. Zero dependencies.
- *
- * The static page list comes straight from the site/ filesystem (not
- * sitemap.xml, which is incomplete); the dynamic blog pages (served from
- * Blob Storage via the Function) are enumerated from the live
- * /sitemap-blog.xml instead, since they don't exist on disk. Redirects
- * and mimeTypes come from staticwebapp.config.json at runtime — nothing
- * about the site is hardcoded, so this keeps working as pages/redirects
- * change.
- *
- * Usage: node scripts/verify-site.mjs [base-url]
- * Exit code 0 = all clean, 1 = something failed (see report).
+ * Crawls a deployed copy of site/ end-to-end — pages, redirects, refs, social meta.
+ * See scripts/README.md for the full check list and usage.
  */
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -28,9 +14,8 @@ const UA = 'BACWebsite-verify/1.0 (owner-authorised site migration)';
 const CONCURRENCY = 6;
 const MAX_REDIRECTS = 5;
 
-// Domains a page is expected to reference besides itself. baclogistics.co.za
-// is kept absolute in canonical/OG/JSON-LD tags by design; the rest are
-// third-party CDNs/embeds/social links. Anything NOT here is treated as a bug.
+// Allowed cross-origin refs. baclogistics.co.za itself is here because canonical/OG/
+// JSON-LD tags use absolute URLs by design; anything else not listed here is a bug.
 const ALLOWED_EXTERNAL_HOSTS = new Set([
   'baclogistics.co.za', 'www.baclogistics.co.za',
   'cdn.jsdelivr.net', 'code.jquery.com',
@@ -41,20 +26,15 @@ const ALLOWED_EXTERNAL_HOSTS = new Set([
   'wa.me', 'share.google', 'www.google.com', 'maps.google.com', 'www.multi.co.za',
 ]);
 
-// Social tags that must carry a value on every public URL. Absent or content="" means a
-// share on Facebook/LinkedIn/X renders without an image or attribution — the state all 135
-// URLs were in before Stage 5. og:image itself is checked twice over: extractRefs() below
-// already picks up absolute <meta content> URLs, so a populated-but-404 image still fails.
+// Empty/absent means a social share renders with no image/attribution (all 135 URLs' state
+// before Stage 5). og:image's URL validity is separately checked via extractRefs() below.
 const SOCIAL_REQUIRED = [
   'og:locale', 'og:type', 'og:title', 'og:url', 'og:site_name', 'og:image',
   'twitter:card', 'twitter:title', 'twitter:image',
 ];
 
-// The stripped shells carry no chrome and are deliberately excluded from the 39
-// chrome-bearing files, so they carry no social tags either. /404.html is not a public
-// URL anyone shares — it is reached by the 404 response override, which is probed
-// separately above. Asserting share metadata on it fails a page that is correct.
-// (/admin/* is excluded from the crawl entirely, at the urls filter below.)
+// 404.html has no chrome (not a chrome-bearing file) and isn't a shareable URL, so it
+// carries no social tags by design — asserting them here would fail a correct page.
 const NO_SOCIAL_META = new Set(['/404.html']);
 
 function missingSocialMeta(html) {

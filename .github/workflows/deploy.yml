@@ -1,9 +1,6 @@
 name: Deploy to Azure Static Web Apps
 
-# Deploy model:
-#   push to develop -> staging environment (…-staging.7.azurestaticapps.net)
-#   push to main    -> production (baclogistics.co.za)
-#   PRs to main     -> per-PR preview environments
+# push to develop -> staging; push to main -> production; PRs to main -> preview envs.
 
 on:
   push:
@@ -30,11 +27,11 @@ jobs:
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_AMBITIOUS_BUSH_084CDA303 }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "./site" # App source code path
-          api_location: "./api" # Api source code path - optional
-          output_location: "." # Built app content directory - optional
+          app_location: "./site"
+          api_location: "./api"
+          output_location: "."
           production_branch: "main"
           # develop -> named "staging" environment; empty string keeps the default
           # behavior for everything else (main -> production, PRs -> preview envs).

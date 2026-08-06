@@ -1,44 +1,10 @@
 #!/usr/bin/env python3
-"""Stage 6b — move the 69 static images out of the CouchCMS-inherited folder.
+"""Stage 6b — one-shot script that swept references after `git mv site/couch/uploads/image
+site/media` retired the CouchCMS folder. Kept as the record of which references moved and
+why the rest didn't; see scripts/README.md for the full reasoning and the numbers.
 
     site/couch/uploads/image/<sub>/<file>   ->   site/media/<sub>/<file>
     /couch/uploads/image/<sub>/<file>       ->   /media/<sub>/<file>
-
-The move itself is `git mv`; this script sweeps the references. Run it *after* the
-`git mv`, so the 69 destination files exist and the resolution test below can be applied.
-
-WHY THIS IS NOT A REGEX SWEEP
------------------------------
-`site/` holds two intermixed families of `/couch/uploads/` strings and a blind
-substitution corrupts the second one:
-
-  * 307 occurrences that point at one of the 69 files being moved. These must move.
-  * 43 occurrences that point at nothing on disk, and must NOT be rewritten:
-      - 23 redirect *route keys* in staticwebapp.config.json. They are legacy public
-        URLs that deliberately do not exist — they are what is being redirected FROM.
-      - 13 in api/test/blog-render.test.js. Ten are fixture inputs standing in for what
-        the 90 live posts still store in Blob Storage; they are render.js mediaUrl()'s
-        input, not references to repo files. Rewriting them guts the Stage 6a tests.
-      - 2 prose mentions in render.js comments, 1 in site/admin/admin.js, and 4 regexes
-        in the two image scripts that match *stored blob values*.
-
-So the discriminator is not the directory, the extension, or the surrounding syntax —
-it is whether the URL resolves to a file being moved. That is `tasks/lessons.md`'s
-"derive file sets by reference source, not by directory or basename", applied literally:
-every one of the 43 is excluded by construction rather than by a hand-kept skip list.
-
-Two consequences worth naming, because a directory-based rule gets both wrong:
-  * image/blog/news.webp is a STATIC asset that happens to live in a blog/ folder. It
-    moves. Directory is not the discriminator.
-  * The 23 redirect *targets* in the same file as the 23 protected route keys DO resolve,
-    so they are swept. Leaving them would turn every one into a 301 into a 404.
-
-BYTE EXACTNESS
---------------
-`.gitattributes` pins these paths `-text`, which preserves committed bytes rather than
-meaning "LF" (see tasks/lessons.md). The files this touches genuinely disagree:
-staticwebapp.config.json is CRLF with no trailing newline; data/site.json is LF with one.
-So endings are read per file from its own bytes and reproduced, never normalised.
 """
 
 import json
@@ -53,9 +19,8 @@ NEW_DIR = "site/media/"
 OLD_URL = "/couch/uploads/image/"
 NEW_URL = "/media/"
 
-# Dated records of what was measured on a day, not live documentation. Rewriting a URL
-# inside them would falsify the record — docs/validation-2026-07-27.md genuinely cites a
-# /couch/ path it measured on 2026-07-27. README.md and DESIGN.md are live and ARE swept.
+# Dated records of what was measured on a day — rewriting a URL inside them would falsify
+# the record. README.md and DESIGN.md are live docs, not dated records, and ARE swept.
 HISTORICAL = ("docs/", "tasks/")
 
 # Any /couch/uploads/... URL. Deliberately broad: we want to SEE all 350 occurrences and
@@ -148,13 +113,8 @@ def main():
     if kept_detail != expected_protected:
         problems.append(f"protected set moved: {kept_detail} != {expected_protected}")
 
-    # Line endings are compared against the COMMITTED BLOB, not the working copy. Comparing
-    # the working copy to itself cannot fail, and would have missed the real defect here:
-    # api/src/blog-templates/error.html was already CRLF on disk while its blob is LF (a
-    # checkout that predates the .gitattributes pin). Reading those bytes and writing them
-    # back flips 54 line endings — and because that path is pinned `-text`, git records the
-    # flip faithfully instead of normalising it away. The pin means "trust the working copy",
-    # so a stale working copy is a hazard rather than a thing the pin protects you from.
+    # Compared against the COMMITTED BLOB, not the working copy — a working-copy-to-itself
+    # comparison can't fail, and would have missed a real stale checkout. See scripts/README.md.
     for f, (raw, new_raw, _) in edits.items():
         blob = subprocess.run(["git", "show", f"HEAD:{f}"], cwd=ROOT,
                               capture_output=True).stdout
@@ -166,9 +126,8 @@ def main():
         if base.count(b"\n") != new_raw.count(b"\n"):
             problems.append(f"{f}: line count changed")
 
-    # Every destination a swept reference now names must exist on disk. The lookbehind
-    # matters: /blog/media/<f> is Stage 6a's Blob Storage namespace, a different thing
-    # that shares the substring and resolves to no repo file by design.
+    # Every destination a swept reference now names must exist on disk — the lookbehind
+    # excludes /blog/media/<f>, Stage 6a's Blob namespace, which shares the substring only.
     moved_set = set(moved)
     for f, (_, new_raw, _) in edits.items():
         for m in re.finditer(rb"(?<!/blog)/media/[A-Za-z0-9._/-]+\.(?:png|jpe?g|gif|webp)", new_raw):
