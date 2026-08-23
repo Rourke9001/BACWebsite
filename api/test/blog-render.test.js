@@ -25,15 +25,22 @@ test('renderPost fills head and article', () => {
   assert.ok(!html.includes('{{'));         // no unfilled tokens
 });
 
+// Counts only the per-post block. The chrome carries a sitewide Organization
+// script on every page, so "no JSON-LD at all" stopped being the right assertion.
+const postJsonLd = (html) => html
+  .replace(/<!-- @chrome:org-schema -->[\s\S]*?<!-- @end:org-schema -->/, '')
+  .includes('application/ld+json');
+
 test('renderPost adds video, json_ld and robots only when present', () => {
   const plain = render.renderPost(post());
   assert.ok(!plain.includes('gl-blog-article-video'));
-  assert.ok(!plain.includes('application/ld+json'));
+  assert.ok(!postJsonLd(plain), 'a post with no json_ld must not emit a post-level block');
+  assert.ok(plain.includes('"@type": "Organization"'), 'sitewide Organization schema is missing');
   const rich = render.renderPost(post({
     youtube_id: 'lyvv36Vc2m4', json_ld: '{"@type":"NewsArticle"}', robots: 'noindex',
   }));
   assert.ok(rich.includes('youtube.com/embed/lyvv36Vc2m4'));
-  assert.ok(rich.includes('application/ld+json'));
+  assert.ok(postJsonLd(rich));
   assert.ok(rich.includes('content="noindex"'));
   const sneaky = render.renderPost(post({ json_ld: '{"x":"</script><img src=x>"}' }));
   assert.ok(!sneaky.includes('</script><img'));

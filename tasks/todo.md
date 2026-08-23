@@ -111,3 +111,93 @@ step they only ever get older — so removing them buys nothing.
 Fail-open on a Cloudflare outage, a missing secret, or an unreachable rate-limit table
 is intentional and flagged with an `[UNVERIFIED]` subject prefix. For a logistics
 business, dropping real enquiries silently is the worse failure.
+
+---
+
+## Digital estate audit remediation — 2026-08-23
+
+Working from `BAC-Digital-Estate-Report-2026-08-23.docx`, addressing only what
+`baclogistics.co.za` owns in this repo. `bactrans.co.za` is a separate task.
+
+### Verified against the live site before acting
+
+Three findings in the report did not survive checking, and are recorded here so
+nobody re-fixes them:
+
+- [x] **A2 "legacy site still live and indexed" — mostly wrong.** `/about.html`,
+  `/logistics.html`, `/air-freight.html`, `/contact.html`, `/sea-freight.html` and
+  `/bonded-warehousing.html` all already return 301. The auditor appears to have
+  read Google SERP entries rather than fetching the URLs. Only `/news/` was real.
+- [x] **A2 "conflicting founding date" — already resolved.** The current site says
+  1999 throughout; "over 25 years" is consistent with it. The 1998 figure existed
+  only on the retired `/about.html`, which now redirects.
+- [x] **A4 "canonical points at non-www while the site serves www" — backwards.**
+  The site uses the apex form in all 151 absolute self-references and zero www
+  ones, and the canonical tags match. The real defect is that both hostnames
+  return 200 with no redirect between them — an Azure custom-domain setting, not
+  a repo change. Carried to the owner-action list below.
+
+### Done
+
+- [x] **`/news/*` → `/blog/*` 301s.** Two wildcard routes to the blog Function,
+  which resolves the slug against live posts. Handles foldered posts, underscore
+  slugs, deleted posts, and a storage outage. See `docs/legacy-news-redirects.md`.
+- [x] **Removed the superseded per-article `/news/` redirect** — config went from
+  18,175 to 17,507 bytes against the 20 KB SWA ceiling.
+- [x] **POPIA consent is now enforceable.** `required` on all 14 forms, rejected
+  server-side, and recorded affirmatively with the exact wording and an ISO
+  timestamp instead of a bare `1` that was absent when unticked.
+- [x] **Standardised the consent wording.** The 13 service pages said "you consent"
+  while the contact page said "I consent" — a drift the new test caught. All 14 now
+  use the first-person form, pinned to `handler.CONSENT_WORDING`.
+- [x] **`tel:` links international** — `+27119747472` across 89 page-body hrefs and
+  `data/site.json`. Display text stays `011 974 7472`.
+- [x] **`alt="alt"` removed** — the three contact icons are decorative (`alt=""`,
+  their headings already name them); the homepage image got a real description.
+- [x] **YouTube `?si=…?rel=0` fixed** on 6 pages, so `rel=0` is honoured and
+  competitors' videos stop appearing in end screens.
+- [x] **Homepage counters server-render their values** (`25+`, `24/7`, `100%`)
+  instead of a literal `0`; the count-up resets to zero when it actually starts.
+- [x] **Meta descriptions written for 21 pages**, all 150–160 chars, and
+  `og:description` / `twitter:description` synced to match on 21 pages.
+- [x] **Organization JSON-LD on all 37 pages** via a new `partials/org-schema.html`.
+- [x] **FAQPage JSON-LD on `/about/`**, derived from the accordion by
+  `scripts/build-faq-schema.mjs` so the two cannot drift.
+- [x] **Guards added** — `tel:0119747472` and `alt="alt"` to the build's `RETIRED`
+  list, plus `api/test/site-markup.test.js` and `api/test/consent-markup.test.js`.
+- [x] Tests 96 → 119, all passing. `check:chrome` and `check:faq-schema` clean.
+
+### Owner actions — outside this repo
+
+- [ ] **A1 CRITICAL: enable DKIM** on both domains in the Defender portal.
+- [ ] **A1 CRITICAL: publish DMARC + a working `rua` mailbox** on both domains.
+- [ ] A1: map every third-party sender, then move to `p=quarantine`, then `p=reject`.
+- [ ] A1: publish CAA records; correct the `baclogistics.co.za` MX endpoint, which
+      currently points at `bactrans-co-za.mail.protection.outlook.com`.
+- [ ] Decide www vs apex and make one 301 to the other (Azure custom domain).
+      The repo already commits to apex, so www → apex is the no-change-here option.
+- [ ] Run WHOIS on `bactransport.co.za`; record the expiry date. Register
+      `bactransport.online` and other free variants.
+- [ ] Facebook vanity URL, Instagram, the two LinkedIn company pages, the YouTube
+      "depenable" typo, the orphaned `BAC_Updates` handle.
+- [ ] Trade mark filing in Class 39; brand standardisation on "BAC Logistics" /
+      "BAC Transport" in full.
+
+### Blocked on a decision from Rourke
+
+- [ ] **Incoterms 2020 `.docx`** — ICC licensed content. Remove, or link to the ICC,
+      or keep pending legal advice? Currently still served from `/files/`.
+- [ ] **Information Officer** — the privacy policy refers to "the Information
+      Officer" generically. POPIA wants them named. Who is registered?
+- [ ] **Postal code** — omitted from the Organization schema because it is not
+      published anywhere on the site. Supply it and the schema improves.
+- [ ] **Opening hours** — not published, so the schema is `Organization` rather
+      than `LocalBusiness`. Supply them to upgrade it.
+- [ ] **Counter labels** — "Real-time Monitoring" and "Customer Satisfaction Rate"
+      are not numeric metrics and arguably should not be counters. Left as-is:
+      that is a design decision, not a defect.
+
+### Deferred — separate project
+
+- [ ] Convert the `.xls` / `.docx` clearing instructions to PDF or fillable web
+      forms. Rourke's call: this is a project, not a defect fix.

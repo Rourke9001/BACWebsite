@@ -5,6 +5,16 @@ const render = require('./render');
 
 const HTML = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=60' };
 
+// A permanent redirect for a URL the old site owned. Cached hard: these targets
+// only change if a post is renamed, which re-mints the redirect anyway.
+function movedTo(location) {
+  return {
+    status: 301,
+    headers: { Location: location, 'Cache-Control': 'public, max-age=3600' },
+    body: '',
+  };
+}
+
 function notFound() {
   return {
     status: 404,
@@ -43,6 +53,21 @@ async function handleBlogRequest(pathname, deps) {
       headers: { 'Content-Type': media.contentType, 'Cache-Control': 'public, max-age=31536000, immutable' },
       body: media.buffer,
     };
+  }
+
+  // Resolved before the post load below, because a retired URL must still redirect
+  // during a storage outage — a 503 on a 2019 inbound link is worse than a guess.
+  if (route.kind === 'legacy') {
+    if (!route.slug) return movedTo('/blog/');
+    const posts = await deps.getPosts().catch((err) => {
+      deps.log(`legacy redirect degraded, storage unavailable: ${err.message}`);
+      return [];
+    });
+    // Matched on slug alone: posts were reorganised into folders after these URLs
+    // were minted, so the folder in the old path is a hint, not an identity.
+    const post = posts.find((p) => p.name === route.slug && !p.unpublished);
+    if (!post) return movedTo('/blog/');
+    return movedTo(post.folder ? `/blog/${post.folder}/${post.name}.html` : `/blog/${post.name}.html`);
   }
 
   let posts;
