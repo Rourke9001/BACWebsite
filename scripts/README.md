@@ -16,6 +16,18 @@
   reappearing anywhere in the 39 files. In write mode nothing is written unless every one
   of those passes first.
 
+- **build-faq-schema.mjs** — regenerates the `FAQPage` JSON-LD on
+  `site/about/index.html` from the accordion markup on that same page, so the
+  structured data can never contradict the visible answers. Zero dependencies.
+
+  ```
+  npm run build:faq-schema                 # rewrite in place
+  npm run check:faq-schema                 # verify only, non-zero if stale
+  ```
+
+  `api/test/site-markup.test.js` re-derives the schema and compares, so a stale
+  block fails the test run even if the check script is never invoked.
+
 - **verify-site.mjs** — crawls a deployed copy of the site (staging, a PR preview,
   or production) and checks that every page loads, every same-site reference
   resolves, redirects and the 404 page behave, and the downloadable docs serve
