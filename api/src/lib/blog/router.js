@@ -18,7 +18,33 @@ function routeBlogPath(rawPath) {
   }
   const post = p.match(/^\/blog\/([a-z0-9-]+)\.html$/);
   if (post) return { kind: 'post', folder: null, slug: post[1] };
+
+  const legacy = routeLegacyNewsPath(p);
+  if (legacy) return legacy;
+
   return { kind: 'notfound' };
+}
+
+// The pre-2026 Couch site published articles under /news/. Those URLs are still
+// indexed, so they resolve to a 301 rather than a 404 — the handler turns a
+// { kind: 'legacy' } route into the canonical /blog/ location. A null slug means
+// "nothing specific to point at", which the handler sends to the blog index.
+function routeLegacyNewsPath(p) {
+  if (p === '/news' || p === '/news/') return { kind: 'legacy', folder: null, slug: null };
+
+  const m = p.match(/^\/news\/(?:([a-z0-9_-]+)\/)?([a-z0-9_-]+)\.html$/);
+  if (!m) return null;
+
+  // The retired host's .htaccess rewrote underscore slugs to hyphens per article;
+  // that rewrite died with the host, so normalise here instead.
+  const folder = m[1] ? m[1].replace(/_/g, '-') : null;
+  const slug = m[2].replace(/_/g, '-');
+
+  // An unrecognised folder is a URL shape we never published — send it to the
+  // index rather than minting a 301 that lands on a 404.
+  if (folder && !FOLDERS.includes(folder)) return { kind: 'legacy', folder: null, slug: null };
+
+  return { kind: 'legacy', folder, slug };
 }
 
 module.exports = { routeBlogPath, FOLDERS };

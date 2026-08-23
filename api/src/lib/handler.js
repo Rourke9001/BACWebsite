@@ -9,7 +9,13 @@ const FORMS = {
   service_form: { subject: 'BAC Logistics Service Form' },
 };
 
-const REQUIRED_FIELDS = ['name', 'email', 'message'];
+const REQUIRED_FIELDS = ['name', 'email', 'message', 'consent'];
+// POPIA s11 wants consent that is voluntary, specific, informed AND demonstrable.
+// The exact string shown to the person is recorded with every submission, so a
+// later subject-access request can be answered with what they actually agreed to.
+// Changing the wording on the pages means bumping this in the same commit --
+// api/test/handler.test.js pins the two together.
+const CONSENT_WORDING = "By filling in this form, I consent to being contacted and agree to BAC Logistics' Privacy Policy.";
 const SUCCESS_REDIRECT = '/information/thank-you.html';
 const ERROR_REDIRECT = '/';
 const DEFAULT_RECIPIENT = 'info@baclogistics.co.za';
@@ -127,7 +133,7 @@ async function handleSubmission(fields, meta, deps) {
       fromName: FROM_NAME,
       replyTo: String(fields.email),
       subject: verified ? formCfg.subject : `[UNVERIFIED] ${formCfg.subject}`,
-      text: composeBody(contentFields, { formId, ip, rid, captchaOutcome, spamScore }),
+      text: composeBody(contentFields, { formId, ip, rid, captchaOutcome, spamScore, nowSec }),
     });
   } catch (err) {
     log(`[${rid}] send_failed form=${formId}: ${err.message}`);
@@ -147,7 +153,7 @@ function cleanFields(fields) {
   return cleaned;
 }
 
-function composeBody(fields, { formId, ip, rid, captchaOutcome, spamScore }) {
+function composeBody(fields, { formId, ip, rid, captchaOutcome, spamScore, nowSec }) {
   const labels = {
     name: 'Name',
     email: 'Email',
@@ -155,7 +161,6 @@ function composeBody(fields, { formId, ip, rid, captchaOutcome, spamScore }) {
     company: 'Company',
     message_subject: 'Subject',
     message: 'Message',
-    consent: 'Consent given',
     form_location: 'Submitted from',
   };
   const lines = [];
@@ -163,6 +168,14 @@ function composeBody(fields, { formId, ip, rid, captchaOutcome, spamScore }) {
     const value = String(fields[key] || '').trim();
     if (value) lines.push(`${label}: ${value}`);
   }
+  // Spelled out rather than echoing the raw "1": validation above guarantees it was
+  // ticked, and the wording plus timestamp are what make the record demonstrable.
+  const recordedAt = new Date((nowSec ?? Math.floor(Date.now() / 1000)) * 1000).toISOString();
+  lines.push(
+    'Consent given: Yes',
+    `Consent wording: ${CONSENT_WORDING}`,
+    `Consent recorded: ${recordedAt}`,
+  );
   lines.push('', `Form: ${formId}`, `IP: ${ip}`, `Request ID: ${rid}`);
   if (captchaOutcome && captchaOutcome !== 'pass') {
     lines.push(`Captcha: ${captchaOutcome} — this message was NOT verified as human`);
@@ -173,4 +186,6 @@ function composeBody(fields, { formId, ip, rid, captchaOutcome, spamScore }) {
   return lines.join('\n');
 }
 
-module.exports = { handleSubmission, SUCCESS_REDIRECT, ERROR_REDIRECT, DEFAULT_RECIPIENT };
+module.exports = {
+  handleSubmission, SUCCESS_REDIRECT, ERROR_REDIRECT, DEFAULT_RECIPIENT, CONSENT_WORDING,
+};

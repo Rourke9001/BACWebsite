@@ -201,6 +201,11 @@
                 });
             }
 
+            // The markup now ships the final value so crawlers and no-JS readers see it
+            // (it used to be a literal "0"). Reset to zero here, at the moment the
+            // animation actually starts, so the count-up still reads as a count-up.
+            element.textContent = formatValue(0);
+
             function step(timestamp) {
                 if (!startTime) {
                     startTime = timestamp;

@@ -317,3 +317,19 @@ test('graph send surfaces token and sendMail failures', async () => {
   const sender2 = createEmailSender(GRAPH_ENV, () => {}, rejected.fetchImpl);
   await assert.rejects(() => sender2.send(graphMessage()), /sendMail failed \(403\)/);
 });
+
+test('a submission without consent is rejected - POPIA needs demonstrable consent', async () => {
+  const { result, sent } = await run(validFields({ consent: undefined }));
+  assert.equal(result.payload.ok, false);
+  assert.equal(result.payload.errors.consent, 'Required');
+  assert.equal(sent.length, 0, 'a submission without consent must never be emailed');
+});
+
+test('consent is recorded affirmatively, not by the absence of a line', async () => {
+  // An unticked box submits nothing at all, so "no line" was indistinguishable
+  // from "never asked". POPIA wants the record explicit and dated.
+  const { sent } = await run(validFields());
+  assert.match(sent[0].text, /Consent given: Yes/);
+  assert.match(sent[0].text, /Consent wording: /);
+  assert.match(sent[0].text, /Consent recorded: \d{4}-\d{2}-\d{2}T/);
+});

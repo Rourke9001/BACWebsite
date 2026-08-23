@@ -1,7 +1,7 @@
 {
   "_comment": "Single source for values repeated across the site chrome. Edit here, run `npm run build:chrome` (or `node scripts/build-chrome.mjs`), commit the diff. Referenced from partials/*.html as ${name}. An unknown or unused key is a build error.",
 
-  "phone_tel": "0119747472",
+  "phone_tel": "+27119747472",
   "whatsapp": "+27743531111",
 
   "gtm_id": "GTM-MPPHRHH",

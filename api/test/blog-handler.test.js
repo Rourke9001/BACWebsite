@@ -57,3 +57,50 @@ test('sitemap path renders xml', async () => {
   assert.ok(res.body.includes('/blog/handler-post.html'));
   assert.ok(res.headers['Content-Type'].includes('xml'));
 });
+
+test('a retired /news/ URL 301s to the canonical post', async () => {
+  const res = await handleBlogRequest('/news/handler-post.html', deps());
+  assert.strictEqual(res.status, 301);
+  assert.strictEqual(res.headers.Location, '/blog/handler-post.html');
+});
+
+test('a /news/ URL for a foldered post 301s to the foldered blog path', async () => {
+  const foldered = { ...fixture, folder: 'customs-clearing' };
+  const res = await handleBlogRequest('/news/customs-clearing/handler-post.html',
+    deps({ getPosts: async () => [foldered] }));
+  assert.strictEqual(res.status, 301);
+  assert.strictEqual(res.headers.Location, '/blog/customs-clearing/handler-post.html');
+});
+
+test('a /news/ URL resolves by slug even when the folder moved', async () => {
+  // Posts were reorganised into folders after the /news/ URLs were minted, so the
+  // old flat URL must still find its post rather than fall back to the index.
+  const foldered = { ...fixture, folder: 'mining-transport' };
+  const res = await handleBlogRequest('/news/handler-post.html',
+    deps({ getPosts: async () => [foldered] }));
+  assert.strictEqual(res.status, 301);
+  assert.strictEqual(res.headers.Location, '/blog/mining-transport/handler-post.html');
+});
+
+test('a retired /news/ URL with no surviving post 301s to the blog index, never to a 404', async () => {
+  const res = await handleBlogRequest('/news/deleted-long-ago.html', deps());
+  assert.strictEqual(res.status, 301);
+  assert.strictEqual(res.headers.Location, '/blog/');
+  const root = await handleBlogRequest('/news/', deps());
+  assert.strictEqual(root.status, 301);
+  assert.strictEqual(root.headers.Location, '/blog/');
+});
+
+test('an unpublished post is not a 301 target', async () => {
+  const res = await handleBlogRequest('/news/handler-post.html',
+    deps({ getPosts: async () => [{ ...fixture, unpublished: true }] }));
+  assert.strictEqual(res.status, 301);
+  assert.strictEqual(res.headers.Location, '/blog/');
+});
+
+test('legacy redirects are cacheable but survive a storage outage', async () => {
+  const res = await handleBlogRequest('/news/handler-post.html',
+    deps({ getPosts: async () => { throw new Error('down'); } }));
+  assert.strictEqual(res.status, 301);
+  assert.strictEqual(res.headers.Location, '/blog/');
+});

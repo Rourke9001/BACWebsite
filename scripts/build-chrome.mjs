@@ -21,6 +21,11 @@ const RETIRED = [
   '+27 83 375 5906', '+27833755906', 'wa.me/+27833755906', 'tel:0833755906',
   '+27 11 353 1111', '+27113531111', 'wa.me/+27113531111',
   'linkedin.com/company/broughton-amiss-consulting',
+  // Local dialling format: will not connect from a foreign handset, and BAC sells
+  // international freight. Display text stays "011 974 7472"; only href changes.
+  'tel:0119747472',
+  // Placeholder alt text that renders on screen as "alt Address" / "alt Email".
+  'alt="alt"',
 ];
 
 async function loadInputs() {

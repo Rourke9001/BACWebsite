@@ -1,7 +1,7 @@
 {
   "name": "bac-website",
   "private": true,
-  "description": "baclogistics.co.za — static site (site/) + Azure Functions (api/). Root package.json exists only to name the repo-level scripts; there are no dependencies and no build step in the deploy path.",
+  "description": "baclogistics.co.za \u2014 static site (site/) + Azure Functions (api/). Root package.json exists only to name the repo-level scripts; there are no dependencies and no build step in the deploy path.",
   "engines": {
     "node": ">=20"
   },
@@ -10,6 +10,8 @@
     "check:chrome": "node scripts/build-chrome.mjs --check",
     "backup:blog": "node scripts/backup-blog.mjs",
     "verify:site": "node scripts/verify-site.mjs",
-    "test": "npm --prefix api test"
+    "test": "npm --prefix api test",
+    "build:faq-schema": "node scripts/build-faq-schema.mjs",
+    "check:faq-schema": "node scripts/build-faq-schema.mjs --check"
   }
 }
