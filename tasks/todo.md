@@ -245,8 +245,14 @@ Source: `BAC Logistics Developer Briefing Doc_ August 2026 2.0.md` (SEO: Rifumo,
 
 - [x] `npm test` 119 → 127, all passing. `check:chrome`, `check:faq-schema` and
       `check:sitemap` clean.
-- [ ] Push to `develop`, then check the redirects and sitemap on staging.
-- [ ] Open the PR to `main`; Rourke merges.
+- [x] Staging: `verify-site.mjs` reports 141 pages, 108 redirects, 6 files, 329
+      refs, 140 social — 0 failures. All seven `.php` URLs 301 correctly, the
+      sitemap index advertises 42 + 95 = 137 URLs, and the GSC tag is serving.
+- [x] PR #34 opened (`develop` → `main`). Rourke merges.
+- [ ] **After merge:** one test submission on production, confirming the copy
+      reaches `leads@ideation.co.za` and that `info@baclogistics.co.za` cannot
+      see the address on the message. This is the one leg the unit tests can
+      only assert at the payload level — nothing sends real mail in CI.
 
 ## Review
 
