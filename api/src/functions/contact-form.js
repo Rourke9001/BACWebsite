@@ -49,6 +49,8 @@ app.http('contact-form', {
     const deps = {
       sender: emailSender,
       recipient: process.env.CONTACT_RECIPIENT,
+      // Unset falls through to the handler's default; set-but-empty disables it.
+      bcc: process.env.CONTACT_BCC,
       from: process.env.CONTACT_FROM,
       verifyCaptcha: captchaVerifier,
       rateStore,
