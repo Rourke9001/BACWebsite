@@ -31,6 +31,21 @@ test('tel: links are international — a local-format number will not dial from 
   }
 });
 
+// SEO brief, Aug 2026: leads@ideation.co.za counts leads, so a visitor who clicks an
+// address must open a composer with that mailbox already in BCC. The forms carry the
+// same copy server-side — see api/test/handler.test.js.
+test('every mailto: link pre-fills the lead-tracking BCC', () => {
+  let found = 0;
+  for (const { rel, html } of pages) {
+    for (const href of html.match(/mailto:[^"']+/g) || []) {
+      assert.ok(href.includes('?bcc=leads@ideation.co.za'),
+        `${rel} has a mailto without the lead BCC: ${href}`);
+      found += 1;
+    }
+  }
+  assert.ok(found >= 16, `expected the 16 known mailto links, found ${found}`);
+});
+
 test('no placeholder alt text survives', () => {
   for (const { rel, html } of pages) {
     assert.ok(!html.includes('alt="alt"'), `${rel} renders placeholder alt text on screen`);
@@ -45,6 +60,15 @@ test('YouTube embeds carry a single query string, so rel=0 is honoured', () => {
       assert.ok(url.split('?').length <= 2, `${rel} has a double query string: ${url}`);
     }
   }
+});
+
+// Deleting this tag un-verifies the Search Console property and silently stops the
+// performance data the SEO work is measured on. It is one line, so it is easy to lose
+// in a homepage edit — hence a test rather than a comment.
+test('the homepage still carries the Google Search Console verification tag', () => {
+  const home = pages.find((p) => p.rel === 'index.html');
+  assert.match(home.html,
+    /<meta name="google-site-verification" content="MT2UTR0nIg-agVuktScp68_-MIDQs4eu2daVYQXTNWc" \/>/);
 });
 
 test('homepage counters ship their final value, not a literal 0', () => {
@@ -93,6 +117,30 @@ test('every chrome-bearing page carries Organization structured data', () => {
     assert.strictEqual(parsed['@type'], 'Organization');
     assert.match(parsed.contactPoint.telephone, /^\+27/);
   }
+});
+
+// scripts/build-sitemap.mjs derives sitemap-static.xml from the pages themselves.
+// Re-deriving the expected URL set here means a new page, a rename, or a page turned
+// noindex fails the suite rather than quietly going missing from search — which is
+// exactly the drift that left the hand-made sitemap a video-hub page short.
+test('sitemap-static.xml lists exactly the pages that ask to be indexed', () => {
+  const xml = readFileSync(path.join(SITE, 'sitemap-static.xml'), 'utf8');
+  const listed = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+
+  const expected = [];
+  for (const { html } of pages) {
+    const robots = html.match(/<meta\s+name="robots"\s+content="([^"]*)"/);
+    if (robots && /noindex/i.test(robots[1])) continue;
+    const canonical = html.match(/<link\s+rel="canonical"\s+href="([^"]+)"/);
+    if (canonical) expected.push(canonical[1]);
+  }
+  for (const file of readdirSync(path.join(SITE, 'files'))) {
+    expected.push(`https://baclogistics.co.za${encodeURI(`/files/${file}`)}`);
+  }
+
+  assert.deepStrictEqual(listed.slice().sort(), expected.sort(),
+    'sitemap-static.xml is stale — run `npm run build:sitemap`');
+  assert.deepStrictEqual(listed, listed.slice().sort(), 'entries are not in sorted order');
 });
 
 test('the About FAQ schema still matches the accordion it describes', () => {

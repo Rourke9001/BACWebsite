@@ -28,6 +28,28 @@
   `api/test/site-markup.test.js` re-derives the schema and compares, so a stale
   block fails the test run even if the check script is never invoked.
 
+- **build-sitemap.mjs** — regenerates `site/sitemap-static.xml` from the file tree,
+  replacing the hand-made file the migration inherited. Zero dependencies.
+
+  ```
+  npm run build:sitemap                    # rewrite in place
+  npm run check:sitemap                    # verify only, non-zero if stale (CI runs this)
+  ```
+
+  A page is listed when it declares a `<link rel="canonical">`, is not under `/admin/`,
+  and is not marked `noindex`; the `<loc>` is that canonical byte for byte, so a sitemap
+  URL can never contradict the page it points at. Everything in `site/files/` is listed
+  too. `lastmod` comes from the file's last commit date (one `git log` pass, not one per
+  file), falling back to mtime for an uncommitted file or a shallow clone.
+
+  `--check` compares only the set of `<loc>` values, not the whole file: `lastmod` moves
+  with every commit that touches a page, so a byte-exact check would fail on the very
+  commit that regenerates it. Missing and orphaned URLs are the drift worth catching, and
+  `api/test/site-markup.test.js` re-derives the same set so the suite catches it too.
+
+  Blog posts are not here — they live in Blob Storage and are served at
+  `/sitemap-blog.xml` by the Function. `site/sitemap.xml` is the index over both.
+
 - **verify-site.mjs** — crawls a deployed copy of the site (staging, a PR preview,
   or production) and checks that every page loads, every same-site reference
   resolves, redirects and the 404 page behave, and the downloadable docs serve

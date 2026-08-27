@@ -1,0 +1,166 @@
+#!/usr/bin/env node
+/**
+ * Regenerates site/sitemap-static.xml from the file tree, replacing the hand-made
+ * file that shipped with the migration ("created with Free Online Sitemap Generator")
+ * and had already gone stale. See scripts/README.md for usage.
+ *
+ * A page earns a <loc> when it declares a canonical URL, is not under /admin/, and is
+ * not marked noindex — so the sitemap is a projection of what the pages themselves say
+ * rather than a second list that has to be kept in step with them. The <loc> IS the
+ * canonical, byte for byte: a sitemap URL that disagrees with the page's canonical is
+ * a contradictory signal, and deriving the URL from the path instead would let the two
+ * drift apart silently.
+ *
+ * Blog posts are deliberately absent: they live in Blob Storage, change without a
+ * deploy, and are already served dynamically at /sitemap-blog.xml. site/sitemap.xml is
+ * the index over the two halves.
+ *
+ * Zero dependencies.
+ */
+import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const run = promisify(execFile);
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const SITE = path.join(ROOT, 'site');
+const OUT = path.join(SITE, 'sitemap-static.xml');
+const ORIGIN = 'https://baclogistics.co.za';
+// Public downloads. They are linked from the site chrome, so they are discoverable
+// either way; listing them lets Search Console report on them as their own documents.
+const FILES_DIR = path.join(SITE, 'files');
+
+const CANONICAL_RE = /<link\s+rel="canonical"\s+href="([^"]+)"/i;
+const ROBOTS_RE = /<meta\s+name="robots"\s+content="([^"]*)"/i;
+
+async function walk(dir) {
+  const out = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...(await walk(full)));
+    else out.push(full);
+  }
+  return out;
+}
+
+/**
+ * Last commit date per repo-relative path, from a single `git log` pass — 40 files
+ * meant 40 child processes the obvious way. First sighting wins: git logs newest first.
+ */
+async function lastCommitDates() {
+  const dates = new Map();
+  let stdout;
+  try {
+    ({ stdout } = await run('git', ['log', '--pretty=format:\x01%cI', '--name-only'], {
+      cwd: ROOT, maxBuffer: 64 * 1024 * 1024,
+    }));
+  } catch {
+    return dates; // shallow clone, no git, detached tarball — fall back to mtime
+  }
+  let current = null;
+  for (const line of stdout.split('\n')) {
+    if (line.startsWith('\x01')) { current = line.slice(1).trim(); continue; }
+    const file = line.trim();
+    if (file && current && !dates.has(file)) dates.set(file, current);
+  }
+  return dates;
+}
+
+async function lastmodFor(full, dates) {
+  const rel = path.relative(ROOT, full).split(path.sep).join('/');
+  const committed = dates.get(rel);
+  if (committed) return committed;
+  // Uncommitted or newly added: mtime is the honest answer, and the next run after
+  // the commit replaces it with the commit date.
+  return (await stat(full)).mtime.toISOString().replace(/\.\d{3}Z$/, '+00:00');
+}
+
+async function collect(dates) {
+  const entries = [];
+
+  for (const full of await walk(SITE)) {
+    if (!full.endsWith('.html')) continue;
+    const rel = path.relative(SITE, full).split(path.sep).join('/');
+    if (rel.startsWith('admin/')) continue; // role-gated, and noindex besides
+
+    const html = await readFile(full, 'utf8');
+    const robots = html.match(ROBOTS_RE);
+    if (robots && /noindex/i.test(robots[1])) continue;
+
+    const canonical = html.match(CANONICAL_RE);
+    // No canonical means the page is not making a claim to be indexed (404.html).
+    // Anything else reaching here is a page that forgot one — worth the noise.
+    if (!canonical) {
+      console.warn(`  skipped ${rel}: no <link rel="canonical">`);
+      continue;
+    }
+    entries.push({ loc: canonical[1], lastmod: await lastmodFor(full, dates), rel });
+  }
+
+  for (const full of await walk(FILES_DIR)) {
+    const rel = path.relative(SITE, full).split(path.sep).join('/');
+    entries.push({ loc: ORIGIN + encodeURI(`/${rel}`), lastmod: await lastmodFor(full, dates), rel });
+  }
+
+  // Sorting by URL puts the origin root first (it is a prefix of every other URL) and
+  // makes the diff of a page rename readable instead of a whole-file reshuffle.
+  entries.sort((a, b) => (a.loc < b.loc ? -1 : a.loc > b.loc ? 1 : 0));
+
+  const seen = new Set();
+  for (const e of entries) {
+    if (seen.has(e.loc)) throw new Error(`two pages claim the same canonical: ${e.loc} (${e.rel})`);
+    seen.add(e.loc);
+  }
+  return entries;
+}
+
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function render(entries) {
+  return '<?xml version="1.0" encoding="UTF-8"?>\n'
+    + '<!-- Generated by scripts/build-sitemap.mjs — do not edit by hand. -->\n'
+    + '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    + entries.map((e) => `  <url>\n    <loc>${esc(e.loc)}</loc>\n    <lastmod>${e.lastmod}</lastmod>\n  </url>\n`).join('')
+    + '</urlset>\n';
+}
+
+/** The <loc> set is what --check guards. lastmod moves with every commit that touches
+ *  a page, so asserting the whole file would fail on the very commit that regenerates
+ *  it — a check nobody could ever satisfy. Missing and orphaned URLs are the drift. */
+function locsOf(xml) {
+  return new Set([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]));
+}
+
+async function main() {
+  const check = process.argv.includes('--check');
+  const entries = await collect(await lastCommitDates());
+  if (entries.length === 0) throw new Error('no indexable pages found — refusing to write an empty sitemap');
+
+  if (check) {
+    const current = locsOf(await readFile(OUT, 'utf8').catch(() => ''));
+    const wanted = new Set(entries.map((e) => e.loc));
+    const missing = [...wanted].filter((u) => !current.has(u));
+    const orphaned = [...current].filter((u) => !wanted.has(u));
+    if (missing.length || orphaned.length) {
+      console.error('✗ sitemap-static.xml is out of date — regenerate with `npm run build:sitemap`');
+      for (const u of missing) console.error(`  missing:  ${u}`);
+      for (const u of orphaned) console.error(`  orphaned: ${u}`);
+      process.exit(1);
+    }
+    console.log(`✓ sitemap-static.xml lists all ${wanted.size} indexable URLs`);
+    return;
+  }
+
+  await writeFile(OUT, render(entries));
+  console.log(`✓ sitemap-static.xml written with ${entries.length} URLs`);
+}
+
+try {
+  await main();
+} catch (err) {
+  if (process.argv.includes('--trace')) throw err;
+  console.error(`✗ ${err.message}`);
+  process.exit(1);
+}

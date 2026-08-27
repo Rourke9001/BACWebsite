@@ -12,6 +12,8 @@
     "verify:site": "node scripts/verify-site.mjs",
     "test": "npm --prefix api test",
     "build:faq-schema": "node scripts/build-faq-schema.mjs",
-    "check:faq-schema": "node scripts/build-faq-schema.mjs --check"
+    "check:faq-schema": "node scripts/build-faq-schema.mjs --check",
+    "build:sitemap": "node scripts/build-sitemap.mjs",
+    "check:sitemap": "node scripts/build-sitemap.mjs --check"
   }
 }

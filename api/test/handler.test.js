@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { handleSubmission, SUCCESS_REDIRECT, DEFAULT_RECIPIENT } = require('../src/lib/handler');
+const { handleSubmission, SUCCESS_REDIRECT, DEFAULT_RECIPIENT, DEFAULT_BCC } = require('../src/lib/handler');
 const { createEmailSender } = require('../src/lib/email');
 const { createMemoryRateStore } = require('../src/lib/rate-store');
 const { TOKEN_FIELD } = require('../src/lib/turnstile');
@@ -39,7 +39,7 @@ function validFields(overrides = {}) {
 
 function run(fields, {
   ip = freshIp(), wantsJson = true, sender, nowSec = NOW,
-  captcha = passingCaptcha, rateStore = sharedRateStore, logs,
+  captcha = passingCaptcha, rateStore = sharedRateStore, logs, bcc,
 } = {}) {
   const sent = [];
   const deps = {
@@ -48,6 +48,9 @@ function run(fields, {
     rateStore,
     logger: logs ? (msg) => logs.push(msg) : () => {},
   };
+  // Absent by default so the production shape (no CONTACT_BCC set) is what most
+  // tests exercise; `bcc: ''` is how a caller turns the blind copy off.
+  if (bcc !== undefined) deps.bcc = bcc;
   const meta = { ip, userAgent: 'test-agent', wantsJson, nowSec };
   return handleSubmission(fields, meta, deps).then((result) => ({ result, sent }));
 }
@@ -60,6 +63,24 @@ test('happy path sends email to info@ and reports ok', async () => {
   assert.equal(sent[0].subject, 'BAC Logistics Contact Form');
   assert.equal(sent[0].replyTo, 'jane@example.com');
   assert.match(sent[0].text, /Jane Tester/);
+});
+
+// SEO brief, Aug 2026: leads@ideation.co.za counts leads, so it must receive a copy
+// of every submission — blind, so the address never reaches the enquirer.
+test('every accepted submission is blind-copied to the lead-tracking mailbox', async () => {
+  assert.equal(DEFAULT_BCC, 'leads@ideation.co.za');
+  for (const form_id of ['contact_form', 'service_form']) {
+    const { sent } = await run(validFields({ form_id, message: `bcc probe ${form_id}` }));
+    assert.equal(sent[0].bcc, DEFAULT_BCC, `${form_id} sent without the lead BCC`);
+  }
+});
+
+test('CONTACT_BCC overrides the default, and an empty one turns the copy off', async () => {
+  const other = await run(validFields({ message: 'bcc override' }), { bcc: 'other@example.com' });
+  assert.equal(other.sent[0].bcc, 'other@example.com');
+  // `||` here instead of `??` would quietly restore the default the operator removed.
+  const off = await run(validFields({ message: 'bcc disabled' }), { bcc: '' });
+  assert.equal(off.sent[0].bcc, '');
 });
 
 test('service_form uses its own subject', async () => {
@@ -297,6 +318,23 @@ test('graph send: client-credentials token then sendMail as the from mailbox', a
   assert.equal(body.message.replyTo[0].emailAddress.address, 'jane@example.com');
   assert.deepEqual(body.message.from.emailAddress, { address: 'donotreply@baclogistics.co.za', name: 'BAC Logistics' });
   assert.equal(body.message.body.content, 'Name: Jane Tester');
+});
+
+test('graph send puts the lead mailbox in bcc, never in to', async () => {
+  const { calls, fetchImpl } = fakeFetch([TOKEN_OK, { status: 202 }]);
+  const sender = createEmailSender(GRAPH_ENV, () => {}, fetchImpl);
+  await sender.send(graphMessage({ bcc: 'leads@ideation.co.za' }));
+
+  const body = JSON.parse(calls[1].options.body);
+  assert.deepEqual(body.message.bccRecipients, [{ emailAddress: { address: 'leads@ideation.co.za' } }]);
+  assert.deepEqual(body.message.toRecipients.map((r) => r.emailAddress.address), ['rourke9001@gmail.com']);
+});
+
+test('graph send omits bccRecipients entirely when no bcc is configured', async () => {
+  const { calls, fetchImpl } = fakeFetch([TOKEN_OK, { status: 202 }]);
+  const sender = createEmailSender(GRAPH_ENV, () => {}, fetchImpl);
+  await sender.send(graphMessage());
+  assert.deepEqual(JSON.parse(calls[1].options.body).message.bccRecipients, []);
 });
 
 test('graph send reuses the cached token across sends', async () => {
