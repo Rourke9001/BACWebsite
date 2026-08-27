@@ -3,7 +3,7 @@
 /**
  * Email sender factory. The Function depends only on this interface:
  *
- *   sender.send({ to, from, fromName, replyTo, subject, text }) -> Promise<void>
+ *   sender.send({ to, bcc, from, fromName, replyTo, subject, text }) -> Promise<void>
  *
  * EMAIL_PROVIDER app setting selects the implementation:
  *   - "stub" (default): logs the message instead of sending — safe until Graph
@@ -20,7 +20,8 @@ function createEmailSender(env, logger, fetchImpl = fetch) {
     return {
       provider,
       async send(message) {
-        logger(`[email:stub] would send "${message.subject}" to ${message.to} (replyTo ${message.replyTo || 'n/a'})`);
+        logger(`[email:stub] would send "${message.subject}" to ${message.to} `
+          + `(bcc ${message.bcc || 'n/a'}, replyTo ${message.replyTo || 'n/a'})`);
       },
     };
   }
@@ -67,7 +68,7 @@ function createGraphSender(env, logger, fetchImpl) {
 
   return {
     provider: 'graph',
-    async send({ to, from, fromName, replyTo, subject, text }) {
+    async send({ to, bcc, from, fromName, replyTo, subject, text }) {
       const token = await getToken();
       const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(from)}/sendMail`;
       const res = await fetchImpl(url, {
@@ -78,6 +79,9 @@ function createGraphSender(env, logger, fetchImpl) {
             subject,
             body: { contentType: 'Text', content: text },
             toRecipients: [{ emailAddress: { address: to } }],
+            // Blind copy, not a second To: the lead-tracking mailbox must not be
+            // visible to anyone the enquiry is later forwarded to.
+            bccRecipients: bcc ? [{ emailAddress: { address: bcc } }] : [],
             replyTo: replyTo ? [{ emailAddress: { address: replyTo } }] : [],
             from: { emailAddress: { address: from, name: fromName } },
           },
@@ -89,7 +93,7 @@ function createGraphSender(env, logger, fetchImpl) {
         const detail = await res.text().catch(() => '');
         throw new Error(`Graph sendMail failed (${res.status}): ${detail.slice(0, 300)}`);
       }
-      logger(`[email:graph] sent "${subject}" to ${to} as ${from}`);
+      logger(`[email:graph] sent "${subject}" to ${to}${bcc ? ` bcc ${bcc}` : ''} as ${from}`);
     },
   };
 }

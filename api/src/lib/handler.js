@@ -19,6 +19,11 @@ const CONSENT_WORDING = "By filling in this form, I consent to being contacted a
 const SUCCESS_REDIRECT = '/information/thank-you.html';
 const ERROR_REDIRECT = '/';
 const DEFAULT_RECIPIENT = 'info@baclogistics.co.za';
+// Ideation's lead-tracking mailbox takes a blind copy of every submission (SEO
+// brief, Aug 2026). Blind so the address never reaches the enquirer or anyone the
+// mail is forwarded to. Override or disable with the CONTACT_BCC app setting —
+// an empty string sends with no BCC at all.
+const DEFAULT_BCC = 'leads@ideation.co.za';
 // Must be a real tenant mailbox — the Graph app sends *as* it. donotreply@ is
 // shared with the office scanner identity; swap to a dedicated noreply@ shared
 // mailbox if one is created. Override: CONTACT_FROM.
@@ -44,7 +49,7 @@ function validEmail(email) {
 
 /**
  * Pure submission pipeline. `meta` = { ip, userAgent, wantsJson, nowSec }.
- * `deps` = { sender, recipient, from, logger, verifyCaptcha, rateStore }.
+ * `deps` = { sender, recipient, bcc, from, logger, verifyCaptcha, rateStore }.
  */
 async function handleSubmission(fields, meta, deps) {
   const rid = crypto.randomUUID();
@@ -123,12 +128,16 @@ async function handleSubmission(fields, meta, deps) {
   }
 
   const to = deps.recipient || DEFAULT_RECIPIENT;
+  // `?? DEFAULT_BCC`, not `|| DEFAULT_BCC`: an app setting deliberately blanked
+  // must turn the blind copy off, not silently fall back to the default.
+  const bcc = deps.bcc ?? DEFAULT_BCC;
   // Mail that reached the inbox without a passing captcha is flagged rather than
   // dropped, so a Cloudflare outage or a missing secret is visible, not silent.
   const verified = captchaOutcome === 'pass';
   try {
     await deps.sender.send({
       to,
+      bcc,
       from: deps.from || DEFAULT_FROM,
       fromName: FROM_NAME,
       replyTo: String(fields.email),
@@ -140,7 +149,7 @@ async function handleSubmission(fields, meta, deps) {
     return buildResult(false, 'We could not send your message. Please try again later.', { rid, wantsJson });
   }
 
-  log(`[${rid}] sent form=${formId} to=${to} captcha=${captchaOutcome} score=${spamScore.score}`);
+  log(`[${rid}] sent form=${formId} to=${to} bcc=${bcc || 'none'} captcha=${captchaOutcome} score=${spamScore.score}`);
   return buildResult(true, 'Thank you.', { rid, wantsJson });
 }
 
@@ -187,5 +196,5 @@ function composeBody(fields, { formId, ip, rid, captchaOutcome, spamScore, nowSe
 }
 
 module.exports = {
-  handleSubmission, SUCCESS_REDIRECT, ERROR_REDIRECT, DEFAULT_RECIPIENT, CONSENT_WORDING,
+  handleSubmission, SUCCESS_REDIRECT, ERROR_REDIRECT, DEFAULT_RECIPIENT, DEFAULT_BCC, CONSENT_WORDING,
 };

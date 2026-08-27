@@ -93,6 +93,25 @@ belongs to `render.js`'s request-time substitution. An unknown or unused key is 
 - Staging and preview environments share production app settings (blob storage,
   email) — an `/admin/` publish or form submission there touches production data.
 
+## Sitemaps
+
+`robots.txt` points crawlers at `/sitemap.xml`, which is a **sitemap index** over the two
+halves of the site — they change on completely different schedules, so they are generated
+in completely different ways:
+
+| URL | Covers | Generated |
+|---|---|---|
+| `/sitemap-static.xml` | the 36 pages in `site/` + the 6 downloads in `site/files/` | `npm run build:sitemap`, committed |
+| `/sitemap-blog.xml` | every published blog post | by the Function, per request, from Blob Storage |
+
+`build-sitemap.mjs` reads the pages rather than a list someone maintains: a page is
+included when it declares a `<link rel="canonical">` and is not `noindex`, and the `<loc>`
+is that canonical verbatim. So the way to keep a page **out** of search is to mark it
+`noindex` — the sitemap follows. `npm run check:sitemap` (and CI, and the test suite)
+fails if the committed file no longer matches the pages.
+
+Add or rename a page → run `npm run build:sitemap` and commit the result.
+
 ## Publishing a blog post
 
 The blog is dynamic: Azure Functions render `/blog`, `/blog/*`, and `/sitemap-blog.xml`
@@ -242,7 +261,13 @@ application settings — no redeploy needed to change them:
 | `EMAIL_PROVIDER` | `graph` |
 | `CONTACT_FROM` | `donotreply@baclogistics.co.za` |
 | `CONTACT_RECIPIENT` | `info@baclogistics.co.za` (single address; use a shared mailbox/distribution list for multiple readers) |
+| `CONTACT_BCC` | *unset* — defaults to `leads@ideation.co.za` in code. Set it to override; set it to an empty string to send with no blind copy at all. |
 | `GRAPH_TENANT_ID` / `GRAPH_CLIENT_ID` / `GRAPH_CLIENT_SECRET` | Graph credentials |
+
+Every accepted submission is blind-copied to `leads@ideation.co.za` so Ideation can count
+leads (SEO brief, Aug 2026). It is a *blind* copy on purpose: the address must not reach the
+enquirer, or anyone the enquiry is later forwarded to. The same address is pre-filled into
+the `bcc` of every `mailto:` link on the site.
 
 ```powershell
 # Change the recipient (takes effect within minutes):

@@ -23,6 +23,12 @@ jobs:
       - name: Site chrome is in sync with partials/ and data/site.json
         run: node scripts/build-chrome.mjs --check
 
+      # A page added or renamed without regenerating the sitemap is invisible to search
+      # until someone notices. Only the <loc> set is compared, so a shallow checkout
+      # (no git history for lastmod) is fine here.
+      - name: Static sitemap covers every indexable page
+        run: node scripts/build-sitemap.mjs --check
+
       - name: API tests
         working-directory: api
         run: npm test

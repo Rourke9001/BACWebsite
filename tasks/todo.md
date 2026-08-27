@@ -201,3 +201,94 @@ nobody re-fixes them:
 
 - [ ] Convert the `.xls` / `.docx` clearing instructions to PDF or fillable web
       forms. Rourke's call: this is a project, not a defect fix.
+
+---
+
+# SEO brief — "BAC Logistics Developer Briefing Doc, August 2026 2.0"
+
+Source: `BAC Logistics Developer Briefing Doc_ August 2026 2.0.md` (SEO: Rifumo,
+25/08/2026). Four tasks; the doc numbers the last one "#1" again — treated as #4.
+
+## Task 1 — BCC `leads@ideation.co.za` on every form and email link
+
+- [x] Added a `bcc` leg to the email sender interface (`api/src/lib/email.js`):
+      `bccRecipients` on the Graph payload, logged by the stub.
+- [x] Default `leads@ideation.co.za` in `api/src/lib/handler.js`, overridable via
+      a `CONTACT_BCC` app setting (same shape as `CONTACT_RECIPIENT`).
+- [x] Appended `?bcc=leads@ideation.co.za` to all 16 `mailto:` hrefs (14 pages).
+- [x] Tests: the handler passes the BCC through, Graph puts it in `bccRecipients`
+      and not `toRecipients`, and a markup test pins the mailto parameter.
+
+## Task 2 — dynamic sitemap
+
+- [x] `scripts/build-sitemap.mjs` generates `site/sitemap-static.xml` from the
+      file tree (indexable pages + `/files/` downloads), `lastmod` from git.
+      Replaces the hand-made "Free Online Sitemap Generator" file, which was
+      already stale — it missed a video-hub page and a download added since.
+- [x] `npm run build:sitemap` / `check:sitemap`, a CI step, and a test so it
+      cannot drift.
+- [x] `site/sitemap.xml` stays the index over static + the already-dynamic
+      `/sitemap-blog.xml`.
+
+## Task 3 — 301s for seven retired `.php` URLs
+
+- [x] Routes in `site/staticwebapp.config.json`. Space-bearing paths got both the
+      literal and the `%20` spelling, since SWA's decode order is not documented.
+- [x] Config is 18,457 bytes against the 20 KB ceiling (was 17,507).
+
+## Task 4 — Google Search Console verification
+
+- [x] `<meta name="google-site-verification" content="MT2UTR0nIg-agVuktScp68_-MIDQs4eu2daVYQXTNWc" />`
+      in the homepage `<head>`, pinned by a test.
+
+## Verification
+
+- [x] `npm test` 119 → 127, all passing. `check:chrome`, `check:faq-schema` and
+      `check:sitemap` clean.
+- [ ] Push to `develop`, then check the redirects and sitemap on staging.
+- [ ] Open the PR to `main`; Rourke merges.
+
+## Review
+
+**Task 1.** The blind copy is server-side for forms and client-side for `mailto:`,
+because those are the only places each can live. The server default sits in
+`handler.js` next to `DEFAULT_RECIPIENT` and reads `deps.bcc ?? DEFAULT_BCC` — `??`
+rather than `||`, so an operator who deliberately blanks `CONTACT_BCC` gets no blind
+copy instead of silently getting the default back. It is `bccRecipients`, never a
+second `toRecipients`: the enquirer, and anyone the mail is later forwarded to, must
+not see the address.
+
+**Task 2 — the judgement call.** The brief says "populates the sitemap.xml file".
+`/sitemap.xml` is a sitemap *index* over a static half and a blog half, and it stays
+one: the blog lives in Blob Storage, changes without a deploy, and is already served
+dynamically at `/sitemap-blog.xml`. Only the static half was hand-maintained, and it
+had already drifted. So the fix is a generator for that half, not a rewrite of the
+index. It reads the pages rather than a list: a page is listed when it declares a
+canonical and is not `noindex`, and the `<loc>` **is** that canonical byte for byte —
+a sitemap URL that contradicts the page's own canonical is a wasted crawl. Net effect:
+40 URLs → 42, picking up `cross-border-freight-delays-often-start-before-the-border.html`
+and `Customs Tariff - Brief.docx`, both of which the old file had missed.
+
+`priority` and `changefreq` are gone. Google has said publicly it ignores both, and
+the old file's identical `2026-06-11T14:40:03` on every page was a `lastmod` that told
+crawlers nothing true. Real per-file commit dates are worth more than a uniform lie.
+
+`--check` compares only the `<loc>` set, not the whole file. `lastmod` moves with every
+commit that touches a page, so a byte-exact check would fail on the very commit that
+regenerates it — unsatisfiable by construction. Missing and orphaned URLs are the drift
+that matters, and they are also what a shallow CI checkout can still see.
+
+**One change nobody asked for:** `/information/thank-you.html` is now `noindex,follow`.
+It was already absent from the hand-made sitemap, and the generator's rule is "the page
+decides" — so leaving it indexable would have *added* a form-confirmation page to search,
+the opposite of the brief's objective. Marking it noindex keeps the rule honest and the
+outcome the same. Flagged because it is a content change outside the brief.
+
+**Task 3.** All seven URLs are covered by six rules — the brief lists `/index.php` twice
+(www and apex), and SWA routes are host-agnostic, so one rule serves both. The test
+asserts each destination is a file that exists: a 301 onto a 404 is worse than the 404
+it replaced.
+
+**Task 4.** Homepage only, which is where Search Console looks for a URL-prefix property.
+A test pins the exact content string, because losing one line in a homepage edit would
+un-verify the property and silently stop the data the SEO work is measured on.

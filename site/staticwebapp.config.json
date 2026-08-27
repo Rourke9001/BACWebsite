@@ -561,6 +561,46 @@
       "route": "/contact.html",
       "redirect": "/contact/",
       "statusCode": 301
+    },
+    {
+      "route": "/index.php",
+      "redirect": "/",
+      "statusCode": 301
+    },
+    {
+      "route": "/about.php",
+      "redirect": "/about/",
+      "statusCode": 301
+    },
+    {
+      "route": "/contact.php",
+      "redirect": "/contact/",
+      "statusCode": 301
+    },
+    {
+      "route": "/services/transport.php",
+      "redirect": "/services/",
+      "statusCode": 301
+    },
+    {
+      "route": "/services/sea freight.php",
+      "redirect": "/services/sea-freight-services.html",
+      "statusCode": 301
+    },
+    {
+      "route": "/services/sea%20freight.php",
+      "redirect": "/services/sea-freight-services.html",
+      "statusCode": 301
+    },
+    {
+      "route": "/services/air freight.php",
+      "redirect": "/services/air-freight-services.html",
+      "statusCode": 301
+    },
+    {
+      "route": "/services/air%20freight.php",
+      "redirect": "/services/air-freight-services.html",
+      "statusCode": 301
     }
   ],
   "responseOverrides": {
