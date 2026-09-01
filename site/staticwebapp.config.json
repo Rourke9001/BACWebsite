@@ -529,7 +529,7 @@
     },
     {
       "route": "/logistics.html",
-      "redirect": "/",
+      "redirect": "/services/customs-solutions.html",
       "statusCode": 301
     },
     {
@@ -575,6 +575,11 @@
     {
       "route": "/contact.php",
       "redirect": "/contact/",
+      "statusCode": 301
+    },
+    {
+      "route": "/news.php",
+      "redirect": "/blog/",
       "statusCode": 301
     },
     {
