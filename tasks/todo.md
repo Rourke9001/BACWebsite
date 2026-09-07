@@ -298,3 +298,28 @@ it replaced.
 **Task 4.** Homepage only, which is where Search Console looks for a URL-prefix property.
 A test pins the exact content string, because losing one line in a homepage edit would
 un-verify the property and silently stop the data the SEO work is measured on.
+
+# Email-signature image hosting — 2026-09-07
+
+Request from the M365 server-side signature pilot (replacing CodeTwo): host five
+approved images at stable public HTTPS URLs. Image hosting only; no mail-flow change.
+
+- [x] Extract ZIP, confirm all five are genuine PNG/JPEG at the expected dimensions.
+- [x] Copy byte-for-byte into `site/media/email-signatures/bac-v11-20260907/` on
+      `feature/email-signature-images`; SHA-256 of every file matches the ZIP.
+- [x] No config change needed: existing `/media/*` rule already gives public access,
+      `Cache-Control: public, max-age=31536000, immutable`, and SWA's default
+      `image/png` / `image/jpeg` types. No auth, no cookies, no redirects, no hotlink rules.
+- [x] Merge to develop, push, staging deploy green (run 34143435842).
+- [x] Verify on staging: all five 200, correct Content-Type, no Set-Cookie, bytes identical.
+- [x] Production checked: new URLs 404 until merge (nothing overwritten); existing
+      `/media/header/bac-all_hdlogo.png` still 200.
+- [x] PR #35 (develop → main) already open; commented with the five production URLs.
+- [ ] **Rourke:** merge PR #35, then re-run the curl check against baclogistics.co.za
+      before replying to the requester.
+
+## Review
+Simplest possible change: five files added, zero lines of config. The versioned folder
+name means a future v12 goes beside it rather than over it, which is what keeps old
+emails rendering. Requester's checklist (HTTPS, no login/cookies/tokens, correct MIME,
+stable URLs, no paid service) is fully met by the existing SWA setup.
