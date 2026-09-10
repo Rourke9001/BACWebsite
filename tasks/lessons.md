@@ -24,6 +24,18 @@ MSG
 Then check with `git log -1 --format='%s'` before pushing. A malformed subject is
 cheap to fix while unpushed and permanent afterwards.
 
+## Heredocs through the Bash tool lose one level of backslashes
+
+Writing a test file from a quoted `python - <<'PY'` heredoc turned every `\\` into `\`
+before Python saw it: `'\\n'` became a real newline inside a JS string literal and
+`/\\/\\?/` became `/\/\?/`. Python only hinted with a `SyntaxWarning: invalid escape`
+and the resulting `SyntaxError` surfaced one step later as "1 test, 1 fail" — the whole
+file failed to load, which looks like a test failure rather than a transport problem.
+
+For any content containing backslashes (regexes, JS/Python escapes, Windows paths) use
+the Write or Edit tools, which pass bytes through exactly. Keep heredocs for plain prose
+and shell.
+
 ## `git grep '/pattern'` silently matches nothing on Windows
 
 Measuring Stage 6b's blast radius, this returned nothing at all:

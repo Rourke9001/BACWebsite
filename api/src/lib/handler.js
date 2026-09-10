@@ -31,16 +31,29 @@ const DEFAULT_FROM = 'donotreply@baclogistics.co.za';
 const FROM_NAME = 'BAC Logistics';
 
 // Same shape the old handler produced: JSON for AJAX callers, otherwise a
-// redirect target carrying status + request id.
-function buildResult(ok, message, { errors, rid, wantsJson, silentDrop } = {}) {
+// redirect target carrying status + request id. A rejection goes back to the
+// page the form was on with a coarse `reason` that main.js turns into a visible
+// message -- bouncing to the homepage left the visitor with no idea it failed.
+function buildResult(ok, message, { errors, rid, wantsJson, silentDrop, reason, returnTo } = {}) {
   const payload = { ok, message, request_id: rid };
   if (errors) payload.errors = errors;
+  if (!ok && reason) payload.reason = reason;
   if (wantsJson) {
     return { kind: 'json', status: ok ? 200 : 400, payload, silentDrop: Boolean(silentDrop) };
   }
-  const target = ok ? SUCCESS_REDIRECT : ERROR_REDIRECT;
-  const query = `status=${ok ? 'ok' : 'error'}&rid=${encodeURIComponent(rid)}`;
+  const target = ok ? SUCCESS_REDIRECT : (returnTo || ERROR_REDIRECT);
+  const query = ok
+    ? `status=ok&rid=${encodeURIComponent(rid)}`
+    : `status=error&reason=${encodeURIComponent(reason || 'retry')}&rid=${encodeURIComponent(rid)}`;
   return { kind: 'redirect', status: 303, location: `${target}?${query}`, silentDrop: Boolean(silentDrop) };
+}
+
+// form_location is a hidden field, i.e. attacker-controlled. Only a plain
+// same-site path may become a redirect target: no scheme, no protocol-relative
+// `//host`, no backslash tricks, no query or fragment to smuggle parameters in.
+function safeReturnPath(value) {
+  const path = String(value || '');
+  return /^\/(?![/\\])[A-Za-z0-9._~\-/]{0,200}$/.test(path) ? path : ERROR_REDIRECT;
 }
 
 function validEmail(email) {
@@ -56,12 +69,15 @@ async function handleSubmission(fields, meta, deps) {
   const { ip, userAgent, wantsJson } = meta;
   const nowSec = meta.nowSec ?? Math.floor(Date.now() / 1000);
   const log = deps.logger || (() => {});
+  const returnTo = safeReturnPath(fields.form_location);
+  const reject = (message, reason, extra = {}) =>
+    buildResult(false, message, { ...extra, reason, rid, wantsJson, returnTo });
 
   const formId = String(fields.form_id || '');
   const formCfg = FORMS[formId];
   if (!formCfg) {
     log(`[${rid}] unknown form_id "${formId}" from ${ip}`);
-    return buildResult(false, 'Unknown form.', { rid, wantsJson });
+    return reject('Unknown form.', 'form');
   }
 
   // Cheapest gates first, then the durable rate limit, then the external
@@ -69,20 +85,20 @@ async function handleSubmission(fields, meta, deps) {
   // Rejections use generic messages on purpose: no hints for bots.
   if (spam.honeypotTriggered(fields)) {
     log(`[${rid}] honeypot_trigger form=${formId} ip=${ip}`);
-    return buildResult(false, 'Something went wrong. Please try again.', { rid, wantsJson, silentDrop: true });
+    return reject('Something went wrong. Please try again.', 'retry', { silentDrop: true });
   }
 
   const tsReason = spam.timestampSuspect(fields, nowSec);
   if (tsReason) {
     log(`[${rid}] timestamp_${tsReason} form=${formId} ip=${ip}`);
-    return buildResult(false, 'Please reload the page and try again.', { rid, wantsJson, silentDrop: true });
+    return reject('Please reload the page and try again.', 'reload', { silentDrop: true });
   }
 
   if (deps.rateStore) {
     const { limited, count } = await deps.rateStore.hit(formId, ip, nowSec);
     if (limited) {
       log(`[${rid}] rate_limited form=${formId} ip=${ip} count=${count}`);
-      return buildResult(false, 'Too many submissions. Please try again later.', { rid, wantsJson, silentDrop: true });
+      return reject('Too many submissions. Please try again later.', 'busy', { silentDrop: true });
     }
   }
 
@@ -92,7 +108,7 @@ async function handleSubmission(fields, meta, deps) {
     captchaOutcome = verdict.outcome;
     if (!verdict.ok) {
       log(`[${rid}] captcha_fail form=${formId} ip=${ip} reason=${verdict.reason}`);
-      return buildResult(false, 'Verification failed. Please reload the page and try again.', { rid, wantsJson, silentDrop: true });
+      return reject('Verification failed. Please reload the page and try again.', 'verify', { silentDrop: true });
     }
   }
 
@@ -109,7 +125,7 @@ async function handleSubmission(fields, meta, deps) {
 
   if (Object.keys(errors).length > 0) {
     log(`[${rid}] validation_fail form=${formId} ip=${ip} fields=${Object.keys(errors).join(',')}`);
-    return buildResult(false, 'Please correct the highlighted fields.', { errors, rid, wantsJson });
+    return reject('Please correct the highlighted fields.', 'fields', { errors });
   }
 
   // Logged on every submission, accepted ones included, so the threshold can be
@@ -117,7 +133,7 @@ async function handleSubmission(fields, meta, deps) {
   const spamScore = spam.score(fields);
   if (spam.isSpamByScore(spamScore)) {
     log(`[${rid}] spam_score_block form=${formId} ip=${ip} score=${spamScore.score} signals=${spamScore.signals.join(',')}`);
-    return buildResult(false, 'Something went wrong. Please try again.', { rid, wantsJson, silentDrop: true });
+    return reject('Something went wrong. Please try again.', 'retry', { silentDrop: true });
   }
 
   // Duplicate submits inside the TTL pretend success without re-sending.
@@ -146,10 +162,22 @@ async function handleSubmission(fields, meta, deps) {
     });
   } catch (err) {
     log(`[${rid}] send_failed form=${formId}: ${err.message}`);
-    return buildResult(false, 'We could not send your message. Please try again later.', { rid, wantsJson });
+    return reject('We could not send your message. Please try again later.', 'send');
   }
 
   log(`[${rid}] sent form=${formId} to=${to} bcc=${bcc || 'none'} captcha=${captchaOutcome} score=${spamScore.score}`);
+
+  // Integrately lead tracking (developer brief, Sep 2026). Only a delivered
+  // enquiry is forwarded, and a webhook problem is the agency's to notice in
+  // the logs -- the enquirer has already been emailed to BAC, so they see success.
+  if (deps.forwardWebhook) {
+    try {
+      const outcome = await deps.forwardWebhook({ formId, fields: contentFields, rid, nowSec });
+      log(`[${rid}] webhook_${outcome && outcome.skipped ? 'skipped' : 'sent'} form=${formId}`);
+    } catch (err) {
+      log(`[${rid}] webhook_failed form=${formId}: ${err.message}`);
+    }
+  }
   return buildResult(true, 'Thank you.', { rid, wantsJson });
 }
 
