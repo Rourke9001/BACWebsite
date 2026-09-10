@@ -5,6 +5,7 @@ const { handleSubmission } = require('../lib/handler');
 const { createEmailSender } = require('../lib/email');
 const { createCaptchaVerifier } = require('../lib/turnstile');
 const { createRateStore } = require('../lib/rate-store');
+const { createWebhookForwarder } = require('../lib/webhook');
 
 // Held per Function instance so the rate limiter keeps its table client and deny
 // cache, and the Graph sender keeps its access token, across invocations.
@@ -13,6 +14,7 @@ const instanceLog = (msg) => currentLog(msg);
 let rateStore = null;
 let captchaVerifier = null;
 let emailSender = null;
+let webhookForwarder = null;
 
 app.http('contact-form', {
   methods: ['POST'],
@@ -45,6 +47,7 @@ app.http('contact-form', {
     if (!rateStore) rateStore = createRateStore(process.env, instanceLog);
     if (!captchaVerifier) captchaVerifier = createCaptchaVerifier(process.env, instanceLog);
     if (!emailSender) emailSender = createEmailSender(process.env, instanceLog);
+    if (!webhookForwarder) webhookForwarder = createWebhookForwarder(process.env, instanceLog);
 
     const deps = {
       sender: emailSender,
@@ -54,6 +57,7 @@ app.http('contact-form', {
       from: process.env.CONTACT_FROM,
       verifyCaptcha: captchaVerifier,
       rateStore,
+      forwardWebhook: (args) => webhookForwarder.forward(args),
       logger,
     };
 

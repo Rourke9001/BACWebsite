@@ -122,6 +122,23 @@ The score is **logged on every submission**, including accepted ones, so the
 threshold can be tuned against real traffic instead of guesswork. This is the only
 arms-race component here; layers 1–3 are what actually stop the current traffic.
 
+## What a rejected visitor sees
+
+Every gate above uses a deliberately generic message, and until September 2026 the
+browser path then redirected to `/?status=error&rid=…` — which nothing rendered. A
+blocked submission was indistinguishable from a broken form, and the September 2026
+developer brief ("service forms do not submit, no thank-you page") reads exactly like
+that path: a QA pass over ten service pages from one office IP trips the 3-per-10-minute
+`service_form` bucket on the fourth submit, and `novalidate` on the forms meant an
+un-ticked consent box went to the server and took the same silent bounce.
+
+Rejections now redirect **back to the submitting page** (the hidden `form_location`,
+accepted only as a plain same-site path — see `safeReturnPath` in `handler.js`) with
+`?status=error&reason=<code>`. `main.js` (`initFormStatus`) maps the code to a sentence
+above the form: `fields`, `verify`, `reload`, `busy`, `send`, `retry`, `form`. The codes
+are as coarse as the JSON messages AJAX callers already received, so nothing new is
+revealed to a bot. `novalidate` was removed so browsers enforce `required` first.
+
 ## Content Security Policy
 
 `BACTransportWebsite/site/staticwebapp.config.json` sets `script-src 'self'`, which

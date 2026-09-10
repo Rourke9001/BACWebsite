@@ -255,6 +255,48 @@
         });
     }
 
+    var REASON_MESSAGES = {
+        fields: 'Please fill in your name, a valid email address and your message, tick the consent box, and send again.',
+        verify: 'We could not verify that you are human. Please reload the page and try again.',
+        reload: 'Please reload the page and try again.',
+        busy: 'Too many submissions from your connection. Please try again in a few minutes.',
+        send: 'We could not send your message right now. Please try again later or email info@baclogistics.co.za.'
+    };
+    var DEFAULT_STATUS_MESSAGE = 'Something went wrong and your enquiry was not sent. Please try again.';
+
+    // The API redirects rejected submissions back to this page with
+    // ?status=error&reason=<code>&rid=<uuid>; without this the failure was invisible.
+    function initFormStatus() {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('status') !== 'error') return;
+
+        var form = document.querySelector('form[action="/api/contact-form"]');
+        if (!form) return;
+
+        var reason = params.get('reason');
+        var message = Object.prototype.hasOwnProperty.call(REASON_MESSAGES, reason) ?
+            REASON_MESSAGES[reason] : DEFAULT_STATUS_MESSAGE;
+
+        var notice = document.createElement('p');
+        notice.className = 'gl-contact-form-status';
+        notice.setAttribute('role', 'alert');
+        notice.textContent = message;
+        form.parentNode.insertBefore(notice, form);
+
+        if (form.scrollIntoView) {
+            form.scrollIntoView({ block: 'start' });
+        }
+
+        if (window.history && window.history.replaceState) {
+            params.delete('status');
+            params.delete('reason');
+            params.delete('rid');
+            var query = params.toString();
+            var newUrl = window.location.pathname + (query ? '?' + query : '') + window.location.hash;
+            window.history.replaceState(null, '', newUrl);
+        }
+    }
+
     function initFormTimestamps() {
         // The static pages carry a frozen form_ts value; the API's min-fill-time
         // spam gate only works when this is stamped at page load.
@@ -353,6 +395,7 @@
         initSlider();
         initFaqs();
         initCounters();
+        initFormStatus();
         initFormTimestamps();
         initTurnstile();
         initBlogPagination();
