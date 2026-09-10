@@ -352,27 +352,29 @@ Source: Bitrix Tasks/11-09-2026 (Ideation brief, SEO specialist Rifumo). Branch
       POST probes from this session were blocked by the permission classifier.
 
 ### Fix
-- [ ] handler.js: rejected browser submissions redirect back to the page they came
+- [x] handler.js: rejected browser submissions redirect back to the page they came
       from (sanitised `form_location`, fallback `/`) with `status=error&reason=<code>`.
-- [ ] main.js: render the reason as a visible alert above the form and scroll to it.
-- [ ] main.css: `.gl-contact-form-status` using existing tokens.
-- [ ] Drop `novalidate` from all 14 forms so browsers enforce required fields.
-- [ ] Tests: handler redirect target + reason; markup test that no form is `novalidate`.
+- [x] main.js: render the reason as a visible alert above the form and scroll to it.
+- [x] main.css: `.gl-contact-form-status` using existing tokens.
+- [x] Drop `novalidate` from all 14 forms so browsers enforce required fields.
+- [x] Tests: handler redirect target + reason; markup test that no form is `novalidate`.
 
 ## Task 2 — Integrately webhooks (services + contact)
 Decision: forward **server-side from the Function after a successful send**, not the
 client-side script in the brief. Reasons: only verified, non-spam, delivered enquiries
 reach Integrately (the July blaster would otherwise flood it); works regardless of
 ad-blockers; no per-page markup on 14 pages; same "Landing Page"/"Timestamp" fields.
-- [ ] api/src/lib/webhook.js: forwarder, URLs default in code, overridable/disable-able
+- [x] api/src/lib/webhook.js: forwarder, URLs default in code, overridable/disable-able
       via `INTEGRATELY_WEBHOOK_CONTACT_FORM` / `INTEGRATELY_WEBHOOK_SERVICE_FORM`.
-- [ ] handler.js: forward after send; failures logged, never affect the visitor.
-- [ ] contact-form.js wiring; tests (webhook.test.js + handler).
-- [ ] Docs: README scope note + settings table; docs/form-anti-spam.md redirect note.
+- [x] handler.js: forward after send; failures logged, never affect the visitor.
+- [x] contact-form.js wiring; tests (webhook.test.js + handler).
+- [x] Docs: README scope note + settings table; docs/form-anti-spam.md redirect note.
 
 ## Verification
-- [ ] `npm test` green.
-- [ ] Local end-to-end with `func start` (stub email, local webhook receiver): ok → 303
-      to thank-you + webhook payload received; bad → 303 back to origin with reason.
+- [x] `npm test` green: 143 tests (127 before).
+- [x] Local end-to-end (stub email, local webhook receiver). `func start` refuses Node 24,
+      so the real Function entry point was driven in-process with WHATWG Requests: ok -> 303
+      to thank-you + webhook payload received; bad -> 303 back to origin with reason;
+      hostile form_location -> `/`; dead webhook -> visitor still sees success.
 - [ ] Staging: alert renders on a service page with `?status=error&reason=fields`.
 - [ ] Push develop, open PR develop → main (Rourke merges).

@@ -29,8 +29,9 @@ in `/files/`) plus 90 blog posts served dynamically from Blob Storage
   form and the dynamic blog.
 - **E-commerce is dropped.** The old codebase contains an unlaunched cart/checkout/PayFast
   build; it was never live and is not migrated.
-- **Integrately webhooks retired.** The new form handler emails via Microsoft 365 only —
-  no third-party forwarding or agency BCCs.
+- **Integrately webhooks: retired 2026-07, reinstated 2026-09 server-side.** The form
+  handler emails via Microsoft 365 and then forwards each *delivered* enquiry to Ideation's
+  Integrately webhook (developer brief, Sep 2026) — see Operations → Contact form.
 - **No database on Azure.** The SQL dump is an offline archive only.
 - **DNS/email:** the domain and DNS zone live at domains.co.za in BAC's own account.
   Email is on Microsoft 365 and its records must never be touched (see Operations).
@@ -263,11 +264,28 @@ application settings — no redeploy needed to change them:
 | `CONTACT_RECIPIENT` | `info@baclogistics.co.za` (single address; use a shared mailbox/distribution list for multiple readers) |
 | `CONTACT_BCC` | *unset* — defaults to `leads@ideation.co.za` in code. Set it to override; set it to an empty string to send with no blind copy at all. |
 | `GRAPH_TENANT_ID` / `GRAPH_CLIENT_ID` / `GRAPH_CLIENT_SECRET` | Graph credentials |
+| `INTEGRATELY_WEBHOOK_CONTACT_FORM` / `INTEGRATELY_WEBHOOK_SERVICE_FORM` | *unset* — default to Ideation's two webhook URLs in `api/src/lib/webhook.js`. Set to override; set to an empty string to stop forwarding that form. |
 
 Every accepted submission is blind-copied to `leads@ideation.co.za` so Ideation can count
 leads (SEO brief, Aug 2026). It is a *blind* copy on purpose: the address must not reach the
 enquirer, or anyone the enquiry is later forwarded to. The same address is pre-filled into
 the `bcc` of every `mailto:` link on the site.
+
+After the email is sent, the same fields (plus `Landing Page`, `Timestamp`, `Form`,
+`Request ID`) are POSTed as JSON to Ideation's Integrately webhook for the form (developer
+brief, Sep 2026). Forwarding is server-side on purpose: only enquiries that passed every
+anti-spam gate and were actually emailed reach the agency, ad-blockers cannot interfere,
+and the 14 form pages need no markup. A webhook failure is logged as `webhook_failed` and
+never changes what the visitor sees.
+
+**What the visitor sees.** Success redirects to `/information/thank-you.html`. A rejected
+submission redirects *back to the page it came from* with `?status=error&reason=<code>`,
+and `main.js` renders the reason above the form. The codes: `fields` (validation),
+`verify` (Turnstile), `reload` (timestamp), `busy` (rate limit — 3 per 10 min per form
+per IP, and every service page shares one `service_form` bucket), `send` (Graph failure),
+`retry` (honeypot / spam score), `form` (unknown form id). Before Sep 2026 every rejection
+bounced to the homepage with nothing displayed, which is how "the forms don't submit"
+reports arise from rate-limited test runs or an un-ticked consent box.
 
 ```powershell
 # Change the recipient (takes effect within minutes):

@@ -39,7 +39,7 @@ function validFields(overrides = {}) {
 
 function run(fields, {
   ip = freshIp(), wantsJson = true, sender, nowSec = NOW,
-  captcha = passingCaptcha, rateStore = sharedRateStore, logs, bcc,
+  captcha = passingCaptcha, rateStore = sharedRateStore, logs, bcc, forwardWebhook,
 } = {}) {
   const sent = [];
   const deps = {
@@ -48,6 +48,7 @@ function run(fields, {
     rateStore,
     logger: logs ? (msg) => logs.push(msg) : () => {},
   };
+  if (forwardWebhook) deps.forwardWebhook = forwardWebhook;
   // Absent by default so the production shape (no CONTACT_BCC set) is what most
   // tests exercise; `bcc: ''` is how a caller turns the blind copy off.
   if (bcc !== undefined) deps.bcc = bcc;
@@ -226,9 +227,76 @@ test('browser (non-JSON) callers get redirects with status + rid', async () => {
   assert.equal(ok.result.status, 303);
   assert.match(ok.result.location, new RegExp(`^${SUCCESS_REDIRECT}\\?status=ok&rid=`));
 
+  // Rejections return to the page the form was on so the reason can be shown
+  // there; bouncing to the homepage left the visitor with no idea it failed.
   const bad = await run(validFields({ email: 'nope' }), { wantsJson: false });
   assert.equal(bad.result.status, 303);
-  assert.match(bad.result.location, /^\/\?status=error&rid=/);
+  assert.match(bad.result.location, /^\/contact\/\?status=error&reason=fields&rid=/);
+});
+
+test('an unsafe form_location never becomes a redirect target', async () => {
+  for (const form_location of ['https://evil.example/', '//evil.example/', '/\\evil.example', '/x?y=1', '/a b', '', undefined]) {
+    const { result } = await run(validFields({ email: 'nope', form_location }), { wantsJson: false });
+    assert.match(result.location, /^\/\?status=error&reason=fields&rid=/, `form_location ${JSON.stringify(form_location)}`);
+  }
+});
+
+test('every rejection carries a reason code the page can explain', async () => {
+  const reasonOf = async (fields, opts) => (await run(fields, opts)).result.payload.reason;
+  assert.equal(await reasonOf(validFields({ form_id: 'nope' })), 'form');
+  assert.equal(await reasonOf(validFields({ company_website: 'x' })), 'retry');
+  assert.equal(await reasonOf(validFields({ form_ts: String(NOW - 1) })), 'reload');
+  assert.equal(await reasonOf(validFields({ email: 'nope' })), 'fields');
+  const failingCaptcha = { async verify() { return { ok: false, outcome: 'fail', reason: 'x' }; } };
+  assert.equal(await reasonOf(validFields(), { captcha: failingCaptcha }), 'verify');
+  const sender = { async send() { throw new Error('down'); } };
+  assert.equal(await reasonOf(validFields({ message: 'reason send check' }), { sender }), 'send');
+  const ip = freshIp();
+  for (let i = 0; i < 3; i += 1) await run(validFields({ message: `reason busy ${i}` }), { ip });
+  assert.equal(await reasonOf(validFields({ message: 'reason busy 4' }), { ip }), 'busy');
+  const ok = await run(validFields({ message: 'reason ok check' }));
+  assert.equal(ok.result.payload.reason, undefined);
+});
+
+// Integrately forwarding (developer brief, Sep 2026): after the email is sent,
+// the cleaned fields go to the agency's webhook so its lead tracking sees them.
+test('an accepted submission is forwarded to the webhook after the email is sent', async () => {
+  const calls = [];
+  const forwardWebhook = async (args) => { calls.push(args); return { ok: true, status: 200 }; };
+  const { result, sent } = await run(validFields({ message: 'webhook forward check' }), { forwardWebhook });
+  assert.equal(result.payload.ok, true);
+  assert.equal(sent.length, 1);
+  assert.equal(calls.length, 1);
+  const [call] = calls;
+  assert.equal(call.formId, 'contact_form');
+  assert.equal(call.rid, result.payload.request_id);
+  assert.equal(call.nowSec, NOW);
+  assert.equal(call.fields.name, 'Jane Tester');
+  assert.equal(call.fields.form_location, '/contact/');
+  for (const hidden of ['form_id', 'form_ts', 'company_website', TOKEN_FIELD]) {
+    assert.equal(call.fields[hidden], undefined, `${hidden} must not reach the webhook`);
+  }
+});
+
+test('a webhook failure is logged and never changes the visitor outcome', async () => {
+  const logs = [];
+  const forwardWebhook = async () => { throw new Error('integrately down'); };
+  const { result, sent } = await run(validFields({ message: 'webhook failure check' }), { forwardWebhook, logs });
+  assert.equal(result.payload.ok, true);
+  assert.equal(sent.length, 1);
+  assert.ok(logs.some((l) => /webhook_failed form=contact_form: integrately down/.test(l)), logs.join('\n'));
+});
+
+test('rejected, duplicate and unsent submissions are not forwarded', async () => {
+  const calls = [];
+  const forwardWebhook = async (args) => { calls.push(args); return { ok: true, status: 200 }; };
+  await run(validFields({ email: 'nope' }), { forwardWebhook });
+  const sender = { async send() { throw new Error('down'); } };
+  await run(validFields({ message: 'webhook unsent check' }), { forwardWebhook, sender });
+  const ip = freshIp();
+  await run(validFields({ message: 'webhook duplicate check' }), { ip, forwardWebhook });
+  await run(validFields({ message: 'webhook duplicate check' }), { ip, forwardWebhook });
+  assert.equal(calls.length, 1, 'only the first, delivered submission is forwarded');
 });
 
 test('sender failure reports a friendly error', async () => {
