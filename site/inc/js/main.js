@@ -283,8 +283,11 @@
         notice.textContent = message;
         form.parentNode.insertBefore(notice, form);
 
+        // Instant, not the html { scroll-behavior: smooth } default: this is a
+        // fresh page load after a redirect, not a click, so a four-screen
+        // animation from the top would be disorienting.
         if (form.scrollIntoView) {
-            form.scrollIntoView({ block: 'start' });
+            form.scrollIntoView({ block: 'start', behavior: 'instant' });
         }
 
         if (window.history && window.history.replaceState) {
