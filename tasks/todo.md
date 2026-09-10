@@ -323,3 +323,56 @@ Simplest possible change: five files added, zero lines of config. The versioned 
 name means a future v12 goes beside it rather than over it, which is what keeps old
 emails rendering. Requester's checklist (HTTPS, no login/cookies/tokens, correct MIME,
 stable URLs, no paid service) is fully met by the existing SWA setup.
+
+# Developer brief 2026-09-11 — service-form failures + Integrately webhooks
+
+Source: Bitrix Tasks/11-09-2026 (Ideation brief, SEO specialist Rifumo). Branch
+`feature/form-fixes-2026-09-11` off develop.
+
+## Task 1 — "service page enquiry forms do not submit / no email / no thank-you"
+
+### Investigation (evidence, not guesses)
+- [x] Production markup and main.js are byte-identical to the repo; the ten service
+      forms differ from the contact form only by `form_id`. No page-specific defect.
+- [x] Turnstile widget renders on production and mints a token (checked in Chrome on
+      /services/mining-transport.html); `TURNSTILE_SECRET` is set; Graph secret valid
+      to 2027-07-14; `EMAIL_PROVIDER=graph`; deploys green; /api/contact-form answers.
+- [x] Application Insights (`bac-swa-debug`) only has data from 2026-09-10 09:45 and no
+      contact-form requests at all — it cannot explain the reported failures.
+- [x] Code-proven defect: **every rejection 303s to `/?status=error&rid=…` and nothing
+      on the site renders that** — the visitor is silently bounced to the homepage,
+      which is exactly the reported symptom. `novalidate` on the forms also disables the
+      browser's own required/consent prompts, so an un-ticked consent box or a blank
+      required field takes that same silent path.
+- [x] Rate limit is 3 per 10 min per `form_id`+IP and all 13 service pages share the
+      `service_form` bucket: a tester walking ten pages from one office IP is silently
+      dropped from the 4th submission. Flagged to Rourke; limit left unchanged.
+- [ ] **Needs Rourke:** one live submission (staging or prod) now that App Insights
+      records traces — the gate that fires will be in `traces` within minutes. Direct
+      POST probes from this session were blocked by the permission classifier.
+
+### Fix
+- [ ] handler.js: rejected browser submissions redirect back to the page they came
+      from (sanitised `form_location`, fallback `/`) with `status=error&reason=<code>`.
+- [ ] main.js: render the reason as a visible alert above the form and scroll to it.
+- [ ] main.css: `.gl-contact-form-status` using existing tokens.
+- [ ] Drop `novalidate` from all 14 forms so browsers enforce required fields.
+- [ ] Tests: handler redirect target + reason; markup test that no form is `novalidate`.
+
+## Task 2 — Integrately webhooks (services + contact)
+Decision: forward **server-side from the Function after a successful send**, not the
+client-side script in the brief. Reasons: only verified, non-spam, delivered enquiries
+reach Integrately (the July blaster would otherwise flood it); works regardless of
+ad-blockers; no per-page markup on 14 pages; same "Landing Page"/"Timestamp" fields.
+- [ ] api/src/lib/webhook.js: forwarder, URLs default in code, overridable/disable-able
+      via `INTEGRATELY_WEBHOOK_CONTACT_FORM` / `INTEGRATELY_WEBHOOK_SERVICE_FORM`.
+- [ ] handler.js: forward after send; failures logged, never affect the visitor.
+- [ ] contact-form.js wiring; tests (webhook.test.js + handler).
+- [ ] Docs: README scope note + settings table; docs/form-anti-spam.md redirect note.
+
+## Verification
+- [ ] `npm test` green.
+- [ ] Local end-to-end with `func start` (stub email, local webhook receiver): ok → 303
+      to thank-you + webhook payload received; bad → 303 back to origin with reason.
+- [ ] Staging: alert renders on a service page with `?status=error&reason=fields`.
+- [ ] Push develop, open PR develop → main (Rourke merges).
