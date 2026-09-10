@@ -376,5 +376,18 @@ ad-blockers; no per-page markup on 14 pages; same "Landing Page"/"Timestamp" fie
       so the real Function entry point was driven in-process with WHATWG Requests: ok -> 303
       to thank-you + webhook payload received; bad -> 303 back to origin with reason;
       hostile form_location -> `/`; dead webhook -> visitor still sees success.
-- [ ] Staging: alert renders on a service page with `?status=error&reason=fields`.
-- [ ] Push develop, open PR develop → main (Rourke merges).
+- [x] Staging: alert renders on /services/customs-solutions.html?status=error&reason=fields,
+      page lands on the form, URL cleaned, Turnstile still injected.
+- [x] Pushed develop (staging green), opened PR #36 develop → main (Rourke merges).
+
+## Review
+Two commits on top of the plan. The user-facing change is small (a redirect target, a
+paragraph above the form, one attribute removed on 14 pages) and it converts every
+existing rejection path into something a visitor and a tester can read; nothing about
+the anti-spam gates themselves changed. Integrately forwarding lives behind the same
+deps-injection seam as email, so the handler tests cover it without any network.
+Deviation from the brief: server-side forwarding instead of the supplied client script,
+because the client script would forward spam and rejected submissions too. Open: the
+actual gate that rejected Ideation's tests needs one live submission now that App
+Insights is recording; and whether 3/10 min per IP is too tight for an office is a
+product call for Rourke.
